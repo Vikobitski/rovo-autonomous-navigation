@@ -1,0 +1,39 @@
+# Parameter für den ublox_gps Node
+ublox_gps_node:
+  ros__parameters:
+    
+    # --- Serielle Port-Konfiguration ---
+    # !! PASSE DIESE WERTE AN !!
+    port: /dev/ttyAMA0  # Der Port, den wir in Schritt 2 freigegeben haben
+    baudrate: 115200     # Muss EXAKT der Rate entsprechen, die du in u-center eingestellt hast
+    
+    # --- Allgemeine Einstellungen ---
+    frame_id: "gps_link"  # Der TF-Frame für den GPS-Empfänger
+    rate: 10              # Die Update-Rate in Hz (muss <= der Rate in u-center sein)
+    
+    # --- GNSS-Protokolle ---
+    # (Stellen sicher, dass der Treiber UBX erwartet und nicht NMEA)
+    gnss:
+      ubx:
+        save:
+          mask: 3 # Speichere Konfiguration im BBR und Flash (optional, aber nützlich)
+
+    # --- RTCM-Eingang (Für RTK) ---
+    # Wir sagen dem Treiber, dass er RTCM3-Nachrichten auf UART1 akzeptieren soll.
+    # Das passt zu deiner u-center-Konfiguration (protocol_in = RTCM3).
+    # Der Treiber wird einen ROS-Topic namens /rtcm_in erstellen,
+    # auf den du später Korrekturdaten pushen kannst.
+    rtcm:
+      in:
+        uart1: true
+
+    # --- Nachrichten-Veröffentlichung ---
+    # Stelle sicher, dass die wichtigsten Nachrichten veröffentlicht werden
+    publish:
+      all: false           # Nicht alles veröffentlichen, nur das, was wir brauchen
+      nav:
+        pvt: true          # SEHR WICHTIG: Veröffentlicht /gps/fix (NavSatFix)
+        relposned: true  # Nützlich für RTK (Relative Position)
+        posecef: true      # Position in ECEF-Koordinaten
+      rxm:
+        rtcm: true         # Erstellt den /rtcm_in Topic

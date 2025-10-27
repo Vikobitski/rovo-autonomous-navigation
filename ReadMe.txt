@@ -16,3 +16,8 @@ ros2 run rovo_hardware imu_node
 
 GIT
 git add . und git commit -m "..." speichern.
+
+Python 
+
+Global installieren:
+--break-system-packages
