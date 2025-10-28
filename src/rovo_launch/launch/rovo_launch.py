@@ -16,8 +16,8 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     
-    #launch_dir = get_package_share_directory('launch')
-    #gps_params_file = os.path.join('~/rovo_ws/src/launch', 'config', 'gps_params.yaml')
+    launch_dir = get_package_share_directory('launch')
+    gps_params_file = os.path.join(launch_dir, 'config', 'gps_params.yaml')
 
     imu_node = Node(
         package='rovo_sensors',
@@ -30,7 +30,7 @@ def generate_launch_description():
         executable='ublox_gps_node',
         name='ublox_gps_node',
         output='screen',
-        parameters=['/home/rovo/rovo_ws/src/launch/config/gps_params.yaml']
+        parameters=[gps_params_file]
     )
 
     return LaunchDescription([
