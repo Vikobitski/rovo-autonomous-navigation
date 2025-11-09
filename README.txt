@@ -1,5 +1,18 @@
-Sourcen:
+SOURCEN:
 source ~/rovo_ws/install/setup.bash
+
+LAUNCHEN
+source install/setup.bash
+ros2 launch bringup main_bringup.launch.py
+
+BAUEN 
+colcon build --packages-select <DEIN_PAKETNAME>
+oder 
+colcon build
+
+ECHO
+
+ros2 topic list
 
 Neues Package (Ordner) erstellen:
 https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Creating-Your-First-ROS2-Package.html
