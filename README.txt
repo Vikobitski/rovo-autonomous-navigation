@@ -35,7 +35,7 @@ ROS2 HowTo:
 Wie man Launch Files in packages einfügt: https://docs.ros.org/en/foxy/Tutorials/Intermediate/Launch/Launch-system.html
 
 launchen 
-ros2 launch rovo_launch.py
+ros2 launch rovo_launch rovo_launch.py
 
 
 

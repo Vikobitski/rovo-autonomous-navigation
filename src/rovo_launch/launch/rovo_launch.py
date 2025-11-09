@@ -23,6 +23,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        imu_node,
+        #imu_node,
         gps_node,
     ])
