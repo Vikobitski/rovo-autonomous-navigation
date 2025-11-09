@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'rovo_sensors'
+package_name = 'bno085'
 
 setup(
     name=package_name,
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'imu_node = rovo_sensors.imu_node:main',
+            'bno085_node = bno085.bno085_node:main',
         ],
     },
 )

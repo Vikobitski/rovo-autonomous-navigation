@@ -13,7 +13,7 @@ from adafruit_bno08x import (
     BNO_REPORT_ROTATION_VECTOR,
 )
 
-class ImuNode(Node):
+class Bno085Node(Node):
     """
     ROS 2 Wrapper für den BNO085 Sensor.
     Liest die fusionierte Quaternion (Rotation Vector), Beschleunigung
@@ -22,7 +22,7 @@ class ImuNode(Node):
     Veröffentlicht außerdem den Kalibrierungsstatus auf /diagnostics.
     """
     def __init__(self):
-        super().__init__('imu_node')
+        super().__init__('bno085_node')
 
         # --- Parameter ---
         self.declare_parameter('frame_id', 'imu_link')
@@ -133,14 +133,14 @@ class ImuNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    imu_node = ImuNode()
+    bno085_node = Bno085Node()
     
     try:
-        rclpy.spin(imu_node)
+        rclpy.spin(bno085_node)
     except KeyboardInterrupt:
         pass
     finally:
-        imu_node.destroy_node()
+        bno085_node.destroy_node()
         rclpy.shutdown()
 
 if __name__ == '__main__':
