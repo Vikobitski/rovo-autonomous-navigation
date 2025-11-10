@@ -968,13 +968,13 @@
       var statusText = 'Unknown';
       var color = 'black';
 
-      if (carrSoln === 2) {
-          statusText = 'RTK Fixed';
-          color = 'green';
-      } else if (carrSoln === 1) {
-          statusText = 'RTK Float';
-          color = 'blue';
-      } else {
+      // if (carrSoln === 2) {
+      //     statusText = 'RTK Fixed';
+      //     color = 'green';
+      // } else if (carrSoln === 1) {
+      //     statusText = 'RTK Float';
+      //     color = 'blue';
+      // } else {
           switch(fixType) {
               case 0: statusText = 'No Fix'; color = 'red'; break;
               case 1: statusText = 'Dead Reckoning'; color = 'orange'; break;
@@ -984,7 +984,7 @@
               case 5: statusText = 'Time Fix Only'; color = 'orange'; break;
               default: statusText = `Unknown (${fixType})`; color = 'red';
           }
-      }
+      // }
       document.getElementById('rtk-status').innerHTML = `<span style="color: ${color};">${statusText}</span>`;
   });
 
