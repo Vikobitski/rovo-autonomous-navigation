@@ -48,6 +48,7 @@ class WebServerNode(Node):
         try:
             # host='0.0.0.0' macht den Server im gesamten Netzwerk erreichbar
             app.run(host='192.168.0.153', port=8000, debug=False)
+            #app.run(host='rovo.local', port=8000, debug=False)
         except OSError as e:
             self.get_logger().error(f"Flask-Server konnte nicht gestartet werden: {e}")
 
