@@ -1,3 +1,7 @@
 [submodule "src/ros2-ublox-zedf9p"]
 	path = src/ros2-ublox-zedf9p
 	url = https://github.com/gokulp01/ros2-ublox-zedf9p.git
+[submodule "src/ublox"]
+	path = src/ublox
+	url = https://github.com/KumarRobotics/ublox.git
+	branch = ros2
