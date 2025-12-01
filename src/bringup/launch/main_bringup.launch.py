@@ -81,6 +81,7 @@ def generate_launch_description():
     rosbridge_pkg_share = get_package_share_directory('rosbridge_server')
     ublox_gps_pkg_share = get_package_share_directory('ublox_gps') 
     ntrip_client_pkg_share = get_package_share_directory('ntrip_client')
+    rtcm_bridge_pkg_share = get_package_share_directory('rtcm_bridge')
 
     # === 2. Nodes definieren ===
     bno085_node = Node(
@@ -124,9 +125,18 @@ def generate_launch_description():
         )
     )
 
+    rtcm_bridge_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(rtcm_bridge_pkg_share, 'launch', 'rtcm_bridge_launch.py')
+        ),
+        # default args for the serial device -- adjust when launching if needed
+        launch_arguments={'device': '/dev/ttyACM0', 'baudrate': '460800'}.items()
+    )
+
     # === 4. Alle Aktionen zusammenfassen ===
     return LaunchDescription([
         ntrip_client_launch,
+        rtcm_bridge_launch,
         rosbridge_launch,
         ublox_gps_launch,
         bno085_node,

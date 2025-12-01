@@ -759,6 +759,9 @@
 </body>
 </html> -->
 
+
+
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -776,13 +779,13 @@
   #status-overlay {
     position: absolute;
     top: 10px;
-    left: 10px;
+    right: 10px;
     background-color: rgba(255, 255, 255, 0.8);
     padding: 10px;
     border-radius: 5px;
     z-index: 1000; /* Stellt sicher, dass es über der Karte liegt */
   }
-  #data-overlay {
+  /* #data-overlay {
     position: absolute;
     bottom: 10px;
     left: 10px;
@@ -790,7 +793,41 @@
     padding: 10px;
     border-radius: 5px;
     z-index: 1000;
-  }
+  } */
+
+  /* Der Haupt-Container für das Overlay */
+#overlay-container {
+    position: absolute; /* Schwebt über der Karte */
+    top: 10px;          /* Abstand von oben */
+    left: 10px;         /* Abstand von links */
+    z-index: 1000;      /* Sicherstellen, dass es über der Karte liegt */
+    background-color: rgba(255, 255, 255, 0.9); /* Weißer, leicht transparenter Hintergrund */
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    font-family: sans-serif;
+    max-width: 300px;
+}
+
+/* Stil für die einzelnen Sektionen im Container */
+.data-section {
+    margin-bottom: 15px; /* Abstand zwischen den Blöcken */
+    border-bottom: 1px solid #ccc; /* Optional: Trennlinie */
+    padding-bottom: 10px;
+}
+
+/* Die letzte Sektion braucht keinen Abstand nach unten */
+.data-section:last-child {
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+h3 {
+    margin-top: 0;
+    margin-bottom: 5px;
+    font-size: 1.1em;
+    color: #333;
+}
   #command-buttons {
     position: absolute;
     bottom: 10px;
@@ -825,7 +862,7 @@
     <strong>Robot-Status:</strong> <span id="robot-status">Warte auf Daten...</span>
   </div>
 
-  <div id="data-overlay">
+  <!-- <div id="data-overlay">
     <h3>Aktuelle Daten:</h3>
     <p><strong>Lat:</strong> <span id="current-lat">N/A</span></p>
     <p><strong>Lon:</strong> <span id="current-lon">N/A</span></p>
@@ -833,6 +870,57 @@
     <p><strong>GPS Fix Mode:</strong> <span id="rtk-status" style="font-weight: bold;">N/A</span></p>
     <p><strong>BNO085 Status:</strong> <span id="bno-status" style="font-weight: bold;">N/A</span></p>
   </div>
+
+  <div id="data-overlay">
+    <h3>Richtung</h3>
+    <div>Heading (GPS): <span id="val_heading">--</span> °</div>
+    <div>Genauigkeit: ± <span id="val_head_acc">--</span> °</div>
+    <div>Heading (Vektor): <span id="val_heading_calc">--</span> °</div>
+  </div>
+
+<div id="data-overlay" style="margin-top: 20px;">
+    <h3>Geschwindigkeit (m/s)</h3>
+    <div>Ground Speed (Total): <span id="val_speed_g">--</span> m/s</div>
+    <div>Velocity Nord (N): <span id="val_vel_n">--</span> m/s</div>
+    <div>Velocity Ost (E): <span id="val_vel_e">--</span> m/s</div>
+    <div>Velocity Runter (D): <span id="val_vel_d">--</span> m/s</div>
+</div> -->
+
+<div id="overlay-container">
+
+  <div class="data-section">
+    <h3>Aktuelle Daten:</h3>
+    
+    <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">ZED-F9P</h3>
+    <div><strong>Lat:</strong> <span id="ZED-F9P-lat">N/A</span></div>
+    <div><strong>Lon:</strong> <span id="ZED-F9P-lon">N/A</span></div>
+
+    <h3 style="margin-top: 15px;">Heading</h3>
+    <div>Heading (GPS): <span id="ZED-F9P_heading">--</span> °</div>
+    <div>Genauigkeit: ± <span id="ZED-F9P_heading_acc">--</span> °</div>
+    
+    <div style="height: 5px;"></div> 
+    
+    <div>Heading (Vektor): <span id="ZED-F9P_heading_calc">--</span> °</div>
+
+    <h3 style="margin-top: 15px;">Geschwindigkeit (m/s)</h3>
+    <div>Ground Speed: <span id="ZED-F9P_speed_g">--</span> m/s</div>
+    <div>Vel Nord (N): <span id="ZED-F9P_vel_n">--</span> m/s</div>
+    <div>Vel Ost (E): <span id="ZED-F9P_vel_e">--</span> m/s</div>
+    <div>Vel Runter (D): <span id="ZED-F9P_vel_d">--</span> m/s</div>
+    
+    <div style="margin-top: 10px;">
+        <strong>GPS Fix:</strong> <span id="ZED-F9P_rtk-status" style="font-weight: bold;">N/A</span>
+    </div>
+  </div>
+
+  <div class="data-section" style="margin-top: 20px;">
+    <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">BNO085</h3>
+    <div><strong>Heading:</strong> <span id="BNO085-absolute-heading">N/A</span>&deg;</div>
+    <div><strong>Status:</strong> <span id="BNO085-status" style="font-weight: bold;">N/A</span></div>
+  </div>
+
+</div>
   
   <div id="command-buttons">
     <h3>Befehle senden:</h3>
@@ -916,7 +1004,7 @@
     if (robotIconImg) {
         robotIconImg.style.transform = `rotate(${currentHeading}deg)`;
     }
-    document.getElementById('current-heading').innerHTML = currentHeading.toFixed(1);
+    document.getElementById('BNO085-absolute-heading').innerHTML = currentHeading.toFixed(1);
   });
 
   // 3.2 GPS-Daten (Position)
@@ -929,9 +1017,9 @@
     var lat = message.latitude;
     var lon = message.longitude;
     robotMarker.setLatLng([lat, lon]);
-    document.getElementById('current-lat').innerHTML = lat.toFixed(6);
-    document.getElementById('current-lon').innerHTML = lon.toFixed(6);
-    document.getElementById('robot-status').innerHTML = '<span style="color: blue;">Alle Daten empfangen</span>';
+    document.getElementById('ZED-F9P-lat').innerHTML = lat.toFixed(6);
+    document.getElementById('ZED-F9P-lon').innerHTML = lon.toFixed(6);
+    document.getElementById('robot-status').innerHTML = '<span style="color: blue;">Positionsdaten empfangen</span>';
   });
 
   // === 4. BNO085 Kalibrierungs-Status ===
@@ -951,7 +1039,7 @@
           case '2': statusText = '<span style="color: blue;">Medium Acc (2)</span>'; break;
           case '3': statusText = '<span style="color: green;">Full Acc (3)</span>'; break;
       }
-      document.getElementById('bno-status').innerHTML = statusText;
+      document.getElementById('BNO085-status').innerHTML = statusText;
     }
   });
 
@@ -985,7 +1073,50 @@
               default: statusText = `Unknown (${fixType})`; color = 'red';
           }
       // }
-      document.getElementById('rtk-status').innerHTML = `<span style="color: ${color};">${statusText}</span>`;
+      document.getElementById('ZED-F9P_rtk-status').innerHTML = `<span style="color: ${color};">${statusText}</span>`;
+  });
+
+    // === Richtungen aus zed-f9p berechnen ===
+  var navPvtTopic = new ROSLIB.Topic({
+      ros: ros,
+      name: '/navpvt', 
+      messageType: 'ublox_msgs/NavPVT'
+  });
+  navPvtTopic.subscribe(function(message) {
+    // --- BERECHNUNGEN ---
+
+    // 1. Heading & Genauigkeit (Rohwert ist 1e-5 Grad)
+    var headingDeg = (message.heading / 100000.0).toFixed(2);
+    var headAccDeg = (message.head_acc / 100000.0).toFixed(2);
+
+    // 2. Geschwindigkeiten (Rohwert ist mm/s -> durch 1000 teilen für m/s)
+    var velN = message.vel_n / 1000.0;
+    var velE = message.vel_e / 1000.0;
+    var velD = message.vel_d / 1000.0;
+    var speedG = (message.g_speed / 1000.0).toFixed(3); // Absolute Ground Speed
+
+    // 3. Heading aus Vektoren berechnen (atan2 von Ost/Nord)
+    // Ergibt Radiant, umrechnen in Grad.
+    var headingRad = Math.atan2(velE, velN); 
+    var headingCalc = headingRad * (180.0 / Math.PI);
+    
+    // Wenn Wert negativ (z.B. -90 für West), in 0-360 Format umwandeln
+    if (headingCalc < 0) {
+        headingCalc += 360;
+    }
+
+    // --- UPDATE DER DIVS (IDS) ---
+
+    // Richtung
+    document.getElementById('ZED-F9P_heading').innerText = headingDeg;
+    document.getElementById('ZED-F9P_heading_acc').innerText = headAccDeg;
+    document.getElementById('ZED-F9P_heading_calc').innerText = headingCalc.toFixed(2);
+
+    // Geschwindigkeit
+    document.getElementById('ZED-F9P_speed_g').innerText = speedG;
+    document.getElementById('ZED-F9P_vel_n').innerText = velN.toFixed(3);
+    document.getElementById('ZED-F9P_vel_e').innerText = velE.toFixed(3);
+    document.getElementById('ZED-F9P_vel_d').innerText = velD.toFixed(3);
   });
 
   // === 6. Befehle senden (Button-Klick) ===
