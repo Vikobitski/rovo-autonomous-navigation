@@ -73,3 +73,11 @@ rovo@rovo:~/rovo_ws/src$ sudo nmcli dev wifi connect "SSID" password "PASSWORT"
 
 
 GUTES HOW TO FÜR RTK SETUP: https://www.ardusimple.com/how-to-integrate-u-blox-zed-f9p-gnss-rtk-receiver-into-ros-2-jazzy/
+
+Key tips for checking fix status:
+Monitor /ublox_gps_node/fix in NavSatFix messages (status.status field) or diagnostic messages for more detailed text-based statuses.
+The /diagnostics topic often provides a readable summary like “3D fix”.
+Use /ublox/navpvt to get detailed information:
+The fix_type field should be 3 for 3D fix.
+The flags field should indicate that corrections are being used.
+The flags2 field includes the RTK status: 67 RTK Float, 128 RTK Fix. If the value is significantly lower, it likely means no RTK corrections are being applied.
