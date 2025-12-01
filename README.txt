@@ -70,3 +70,6 @@ WLan verbindung ändern:
 rovo@rovo:~/rovo_ws/src$ nmcli dev wifi list
 
 rovo@rovo:~/rovo_ws/src$ sudo nmcli dev wifi connect "SSID" password "PASSWORT"
+
+
+GUTES HOW TO FÜR RTK SETUP: https://www.ardusimple.com/how-to-integrate-u-blox-zed-f9p-gnss-rtk-receiver-into-ros-2-jazzy/
