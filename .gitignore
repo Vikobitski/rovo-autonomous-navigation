@@ -3,6 +3,9 @@ build/
 install/
 log/
 
+# csv_logger artifacts
+csv_logs/
+
 # Python cache
 __pycache__/
 *.pyc

@@ -52,19 +52,17 @@ def generate_launch_description():
         )
     )
 
-        # CSV logger node (logs GPS / Pose to CSV files)
-        csv_logger_node = Node(
-            package='csv_logger',
-            executable='csv_logger_node',
-            name='csv_logger',
-            parameters=[
-                {'output_dir': '/home/rovo/rovo_ws/logs'},
-                {'gps_topic': '/fix'},
-                {'pose_topic': '/pose'},
-                {'log_gps': True},
-                {'log_pose': False}
-            ]
-        )
+    # CSV logger node (logs GPS / Pose to CSV files)
+    csv_logger_node = Node(
+        package='csv_logger',
+        executable='csv_logger_node',
+        name='csv_logger',
+        parameters=[
+            {'output_dir': '/home/rovo/rovo_ws/csv_logs'},
+            {'gps_topic': 'ublox_gps_node/fix'},
+            {'log_gps': True},
+        ]
+    )
 
     # === 4. Alle Aktionen zusammenfassen ===
     return LaunchDescription([
