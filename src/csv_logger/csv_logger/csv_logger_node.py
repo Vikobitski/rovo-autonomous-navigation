@@ -166,7 +166,7 @@ class CSVLoggerNode(Node):
                     f'{msg.longitude:.8f}',
                     f'{msg.altitude:.3f}',
                     msg.position_covariance_type,
-                    msg.status.status
+                    msg.statuubls.status
                 ])
             # increment line counter
             self.current_lines += 1
