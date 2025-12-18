@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String, Bool
@@ -165,13 +163,13 @@ class RovoDriverNode(Node):
             self.get_logger().error(f"Error receiving CAN: {e}")
         return None
 
-    def wait_for_response(self, expected_id, byte0, byte2, timeout=5.0):
-        """Wait for specific response bytes"""
+    def wait_for_response(self, expected_id, expected_byte0, expected_byte2, timeout=5.0):
+        """Wait for specific response with timeout"""
         start_time = time.time()
         while time.time() - start_time < timeout:
             msg = self.receive_can_message(expected_id, 0.1)
             if msg and len(msg.data) >= 3:
-                if msg.data[0] == byte0 and msg.data[2] == byte2:
+                if msg.data[0] == expected_byte0 and msg.data[2] == expected_byte2:
                     return True
             time.sleep(0.01)
         return False

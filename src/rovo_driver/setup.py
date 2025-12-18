@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'rovo_driver_node = rovo_driver.rovo_driver_node:main',
         ],
     },
 )
