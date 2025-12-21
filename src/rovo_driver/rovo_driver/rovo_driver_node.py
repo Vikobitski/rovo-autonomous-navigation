@@ -10,30 +10,26 @@ import threading
 import time
 import subprocess
 import os
+import math 
 from enum import Enum
 
-''' README
-- to start from terminal:
-    --> # Start spray
-        ros2 topic pub --once /spray_control std_msgs/msg/String "data: 'spray_start'"
-        # Pause spray
-        ros2 topic pub --once /spray_control std_msgs/msg/String "data: 'spray_pause'"
-    --> # Stop peripherie
-        ros2 topic pub --once /peripherie/stop std_msgs/msg/Bool "data: true"
-'''
-
-class ROVOMode(Enum):
+class RovoMode(Enum):
     IDLE = 0
-    JOYSTICK_MODE = 1
-    SPEED_MODE = 2
+    JOYSTICK = 1
+    AUTOMATIC = 2
 
-class ROVOController(Node):
+class RovoDriverNode(Node):
     def __init__(self):
-        super().__init__('rovo_controller')
+        super().__init__('rovo_driver_node')
+
+        # Rovo Mechanical parameters
+        self.wheelbase = 1.27 # [m]
+        self.gear_ratio = 16
+        self.drive_diameter = 0.35 # [m]
 
         # Operating mode
         self.shutdown_requested = False
-        self.mode = ROVOMode.IDLE
+        self.mode = RovoMode.IDLE
         
         # CAN interface configuration
         self.can_interface = 'can0'
@@ -48,44 +44,34 @@ class ROVOController(Node):
         self.cyclic_lock = threading.Lock()  # Lock for thread safety
 
         # Controller pre-allocs
-        self.gear = 0
+        self.gear = 0 # virtual gear for joystick mode
         self.rb_pressed = False
         self.lb_pressed = False
-        self.x_pressed = False
-        self.x_press_count = 0  # Counter for X button presses
-        self.joystick_x = 0.0
-        self.joystick_y = 0.0
-        self.mag_x = 0
+        self.mag_x = 0 
         self.mag_y = 0
-        self.speed_left = 0
-        self.speed_right = 0
-        self.last_left_dir = 1
-        self.last_right_dir = 1
-        self.dir_left = 0
-        self.dir_right = 0
-
-        # Speed calculation variables
-        self.actual_speed_left_rpm = 0.0  # From CAN 0x30A Byte 0-1
-        self.actual_speed_right_rpm = 0.0  # From CAN 0x30A Byte 2-3
-        self.current_speed_ms = 0.0  # Calculated average speed in m/s
+        self.left_rpm = 0
+        self.right_rpm = 0
                 
-        # Publisher for periphery stop signal
-        self.periphery_stop_publisher = self.create_publisher(
-            Bool,
-            '/peripherie/stop',
+        # Publisher for rovo mode
+        self.rovo_mode_publisher = self.create_publisher(
+            Int32,
+            '/rovo/mode',
             10
         )
         
         # Controller and ROS2 checks FIRST (before CAN setup)
         if not self.check_controller_and_joy():
             self.get_logger().error("\033[91mController or Joy node not available - terminating program\033[0m")
-            self.emergency_shutdown()
             return
+
+        # # WIEDER EINKOMMENTIEREN, WENN REGELUNG IMPLEMENTIERT IST
+        # if not self.check_trajectory_control():
+        #     self.get_logger().error("\033[91mTrajectory control node not available - terminating program\033[0m")
+        #     return
         
         # Setup CAN interface only after controller checks pass
         if not self.setup_can_interface():
             self.get_logger().error("\033[91mCAN interface setup failed!\033[0m")
-            self.emergency_shutdown()
             return
         
         # Initialize CAN interface
@@ -109,20 +95,12 @@ class ROVOController(Node):
             self.get_logger().info("ROVO successfully initialized!")
             self.get_logger().info("Ready for controller inputs:")
             self.get_logger().info("  B = Joystick mode")
-            self.get_logger().info("  Y = Speed mode") 
+            self.get_logger().info("  Y = Automatic mode") 
             self.get_logger().info("  A = Idle mode")
-            self.get_logger().info("  X = Stop periphery (1st press) / Exit program (2nd press)")
         else:
             self.get_logger().error("ROVO initialization failed!")
             return
         
-        # Publisher for spray control
-        self.spray_publisher = self.create_publisher(
-            String,
-            '/spray_control',
-            10
-        )
-
         # Publisher for speed data
         self.speed_publisher = self.create_publisher(
             Twist,
@@ -134,9 +112,6 @@ class ROVOController(Node):
         self.can_receiver_thread = threading.Thread(target=self.speed_monitor)
         self.can_receiver_thread.daemon = True
         self.can_receiver_thread.start()
-        
-        # Status variables
-        self.spray_active = False
 
     def check_controller_and_joy(self):
         """Check if controller exists and joy node is running"""
@@ -151,7 +126,7 @@ class ROVOController(Node):
         self.joy_received = False
         self.joy_subscription = self.create_subscription(Joy, 'joy', self.joy_callback, 10)
 
-        # Wait for Joy messages (max 2 seconds)
+        # Wait for Joy messages (max 7 seconds)
         self.get_logger().info("Waiting for Joy node...")
         start_time = time.time()
         timeout = 7.0
@@ -160,10 +135,33 @@ class ROVOController(Node):
             rclpy.spin_once(self, timeout_sec=0.1)  # Process callbacks for 0.1s
             
         if not self.joy_received:
-            self.get_logger().error(f"Joy node is not running: joy_received: {self.joy_received}")
+            self.get_logger().error(f"Joy node is not running")
             return False
         else:
             self.get_logger().info("Joy node is active")
+            return True
+
+    def check_trajectory_control(self):
+        """Check if trajectory control is active"""
+        self.trajectory_control_subscription = self.create_subscription(
+            Twist,
+            '/rovo/speed_setpoint',
+            self.trajectory_control_callback,
+            20
+        )
+
+        self.get_logger().info("Waiting for Trajectory control node...")
+        start_time = time.time()
+        timeout = 7.0
+        
+        while not self.speed_setpoint_received and (time.time() - start_time) < timeout:
+            rclpy.spin_once(self, timeout_sec=0.1)  # Process callbacks for 0.1s
+
+        if not self.speed_setpoint_received:
+            self.get_logger().error("Trajectory control node is not running")
+            return False
+        else:
+            self.get_logger().info("Trajectory control node is active")
             return True
 
     def setup_can_interface(self):
@@ -354,16 +352,29 @@ class ROVOController(Node):
                 message = self.can_bus.recv(timeout=0.1)
                 if message and message.arbitration_id == 0x30A and len(message.data) >= 4:
                     # Extract RPM values
-                    left_rpm = int.from_bytes(message.data[0:2], byteorder='little', signed=True)
-                    right_rpm = int.from_bytes(message.data[2:4], byteorder='little', signed=True)
+                    self.left_rpm = int.from_bytes(message.data[0:2], byteorder='little', signed=True)
+                    self.right_rpm = int.from_bytes(message.data[2:4], byteorder='little', signed=True)
                     
-                    # Calculate and publish speed in m/s
-                    avg_speed = (left_rpm + right_rpm) * 0.00412125 / 2.0 / 3.6
-                    avg_speed = avg_speed * 1.033 # for gear 1 at 0.16 m/S
-                    # avg_speed = avg_speed * 1.04 # for gear 2 at 0.62 m/S
+                    # Calculate speed in m/s from RPM
+                    # v = (rpm / 60 s/min) * d * pi * 1/ü 
+                    left_velocity = (self.left_rpm / 60.0) * self.drive_diameter * math.pi / self.gear_ratio
+                    right_velocity = (self.right_rpm / 60.0) * self.drive_diameter * math.pi / self.gear_ratio
+                    
+                    # Calculate average speed
+                    linear_velocity = (left_velocity + right_velocity) / 2.0
+
+                    # experimental correction factor if needed:
+                    # avg_speed = avg_speed * 1.033 # for gear 1 at 0.16 m/S
+                    # # avg_speed = avg_speed * 1.04 # for gear 2 at 0.62 m/S
+
+                    # Calculate rotational speed in rad/s
+                    # w = (v_r - v_l) / 2a 
+                    # 2a == wheelbase
+                    angular_velocity = (right_velocity - left_velocity) / self.wheelbase
                     
                     speed_msg = Twist()
-                    speed_msg.linear.x = avg_speed
+                    speed_msg.linear.x = linear_velocity
+                    speed_msg.angular.z = angular_velocity
                     self.speed_publisher.publish(speed_msg)
                     
                     # # Optional: Log occasionally
@@ -382,96 +393,62 @@ class ROVOController(Node):
             self.get_logger().info("First joystick message received!")
             return
         
-        # --- Gear control ---
-        if msg.buttons[5] == 1 and not self.rb_pressed:  # RB pressed
-            self.change_gear(+1)
-            self.rb_pressed = True
-        elif msg.buttons[5] == 0:
-            self.rb_pressed = False
-
-        if msg.buttons[4] == 1 and not self.lb_pressed:  # LB pressed
-            self.change_gear(-1)
-            self.lb_pressed = True
-        elif msg.buttons[4] == 0:
-            self.lb_pressed = False
-        
         # Mode selection based on button presses
-        if msg.buttons[1] == 1:  # B - Joystick mode
-            if self.mode != ROVOMode.JOYSTICK_MODE:
-                self.enter_joystick_mode()
-        elif msg.buttons[3] == 1:  # Y - Speed mode
-            if self.mode != ROVOMode.SPEED_MODE:
-                self.enter_speed_mode()
-        elif msg.buttons[0] == 1:  # A - Idle mode
-            if self.mode != ROVOMode.IDLE:
-                self.enter_idle_mode()
-        elif msg.buttons[2] == 1 and not self.x_pressed:  # X - Stop periphery / Exit
-            self.x_pressed = True
-            self.x_press_count += 1
-            
-            if self.x_press_count == 1:
-                # First press: Stop periphery nodes
-                self.get_logger().info("X pressed (1st time) - Stopping periphery nodes...")
-                stop_msg = Bool()
-                stop_msg.data = True
-                self.periphery_stop_publisher.publish(stop_msg)
-                self.get_logger().info("Periphery stop signal sent. Press X again to exit program.")
-            elif self.x_press_count >= 2:
-                # Second press: Exit program
-                self.get_logger().info("X pressed (2nd time) - Exiting program...")
-                self.running = False
-                # self.shutdown_requested = True
-                self.destroy_node()
-                # rclpy.shutdown()
-                return
-        elif msg.buttons[2] == 0:
-            self.x_pressed = False
 
-        axis_7 = msg.axes[7]
-        
-        # Start spray nodes, i.e. pump-bldc, valves, and propellers
-        if axis_7 > 0.0 and not self.spray_active:
-            spray_msg = String()
-            spray_msg.data = "spray_start"
-            self.spray_publisher.publish(spray_msg)
-            self.spray_active = True
-            self.get_logger().info("Spray nodes started!")
-            
-        # Stop spray nodes, i.e. pump-bldc and valves
-        elif axis_7 < 0.0 and self.spray_active:
-            spray_msg = String()
-            spray_msg.data = "spray_pause"
-            self.spray_publisher.publish(spray_msg)
-            self.spray_active = False
-            self.get_logger().info("Spray nodes paused!")
-        
+        if msg.buttons[0] == 1:  # A - Idle mode
+            if self.mode != RovoMode.IDLE:
+                self.enter_idle_mode()
+
+        elif msg.buttons[1] == 1:  # B - Joystick mode
+            if self.mode != RovoMode.JOYSTICK:
+                self.enter_joystick_mode()
+
+        elif msg.buttons[4] == 1:  # Y - Automatic mode
+            self.get_logger().info("Automatic mode not implemented")
+            # if self.mode != RovoMode.AUTOMATIC:
+            #     self.enter_automatic_mode()
+
         # Handle driving input only in active modes
-        if self.mode == ROVOMode.JOYSTICK_MODE:
-            self.update_joy_mode(msg)
-        elif self.mode == ROVOMode.SPEED_MODE:
-            self.update_speed_mode(msg)
+        if self.mode == RovoMode.JOYSTICK:
+            self.update_joystick_mode(msg)
+
+    def trajectory_control_callback(self, msg):
+        """Handle trajectory control input"""
+        if not self.speed_setpoint_received:
+            self.speed_setpoint_received = True
+            self.get_logger().info("First speed setpoint message received!")
+
+        if self.mode == RovoMode.AUTOMATIC:
+            self.update_automatic_mode(msg)
 
     def enter_joystick_mode(self):
         """Switch to joystick mode"""
         self.get_logger().info("→ JOYSTICK MODE activated")
-        self.mode = ROVOMode.JOYSTICK_MODE
+        self.mode = RovoMode.JOYSTICK
+        rovo_status_msg = Int32()
+        rovo_status_msg.data = RovoMode.JOYSTICK
+        self.rovo_mode_publisher.publish(rovo_status_msg)
         self.send_can_message(0x28A, [0] * 8)
         self.get_logger().info("Gear 0 sent")
         self.set_cyclic_message(0x18A, [0x02, 0x01, 0x00])  # Joystick mode command
 
-    def enter_speed_mode(self):
-        """Switch to speed mode"""
-        self.get_logger().info("→ SPEED MODE activated")
-        self.mode = ROVOMode.SPEED_MODE
-        self.last_left_dir = 1
-        self.last_right_dir = 1
+    def enter_automatic_mode(self):
+        """Switch to automatic mode"""
+        self.get_logger().info("→ AUTOMATIC MODE activated")
+        self.mode = RovoMode.AUTOMATIC
+        rovo_status_msg = Int32()
+        rovo_status_msg.data = RovoMode.AUTOMATIC
+        self.rovo_mode_publisher.publish(rovo_status_msg)
         self.send_can_message(0x28A, [0] * 8)
         self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
 
     def enter_idle_mode(self):
         """Switch to idle mode"""
         self.get_logger().info("→ IDLE MODE activated (Controller inputs ignored)")
-        self.mode = ROVOMode.IDLE
+        self.mode = RovoMode.IDLE
+        rovo_status_msg = Int32()
+        rovo_status_msg.data = RovoMode.IDLE
+        self.rovo_mode_publisher.publish(rovo_status_msg)
         self.set_cyclic_message(0x18A, [0x02, 0x00, 0x00])  # Idle mode command
 
     def change_gear(self, direction: int):
@@ -480,37 +457,33 @@ class ROVOController(Node):
         direction = +1 → shift up
         direction = -1 → shift down
         """
-        if not self.can_change_gear():
-            return  # Abort if speed != 0
 
-        new_gear = self.gear + direction
-        if 0 <= new_gear <= 4:
-            self.gear = new_gear
-            if direction > 0:
-                self.get_logger().info(f"→ Gear up: {self.gear}")
-            else:
-                self.get_logger().info(f"→ Gear down: {self.gear}")
-            
-            # Send CAN frame directly
-            data_28A = [0, 0, self.gear, 0, 0, 0, 0, 0]
-            self.set_cyclic_message(0x28A, data_28A)
+        if self.gear_change_possible():
+            new_gear = self.gear + direction
+            self.gear = self.clamp(new_gear, 0, 4) # Clamp gear to valid range (0-4)
+            self.get_logger().info(f"→ Gear changed to: {self.gear}")
 
-    def can_change_gear(self) -> bool:
+    def clamp(self, n, minn, maxn):
+        return max(minn, min(n, maxn))
+
+    def gear_change_possible(self) -> bool:
         """Checks if gear change is allowed (only at zero speed)."""
-        if ((self.speed_left == 0 and self.speed_right == 0) and (self.mag_x == 0 and self.mag_y == 0)):
+        if (self.left_rpm == 0 and self.right_rpm == 0):
             return True
         else:
             self.get_logger().warn("Gear change blocked – speed not equal to zero")
             return False
 
-    def update_joy_mode(self, msg):
-        self.joystick_x = msg.axes[0]  # Left stick horizontal
-        self.joystick_y = msg.axes[1]  # Left stick vertical
+    def update_joystick_mode(self, msg):
+
+        # --- Joystick control ---
+        joystick_x = msg.axes[0]  # Left stick horizontal
+        joystick_y = msg.axes[1]  # Left stick vertical
 
         # Direction X (Byte0)
-        if self.joystick_x < -0.05:      # Right (negative)
+        if joystick_x < -0.05:      # Right (negative)
             dir_x = 1
-        elif self.joystick_x > 0.05:     # Left (positive)
+        elif joystick_x > 0.05:     # Left (positive)
             dir_x = 2
         else:
             dir_x = 0
@@ -524,91 +497,91 @@ class ROVOController(Node):
             dir_y = 0
 
         # Magnitude X (Byte3+4)
-        self.mag_x = self.scale_joystick_value(self.joystick_x)
+        self.mag_x = self.scale_joystick_value(joystick_x)
         mag_x_l = self.mag_x & 0xFF
         mag_x_h = (self.mag_x >> 8) & 0xFF
 
         # Magnitude Y (Byte5+6)
-        self.mag_y = self.scale_joystick_value(self.joystick_y)
+        self.mag_y = self.scale_joystick_value(joystick_y)
         mag_y_l = self.mag_y & 0xFF
         mag_y_h = (self.mag_y >> 8) & 0xFF
 
+        # --- Gear control ---
+        if msg.buttons[7] == 1 and not self.rb_pressed:  # RB pressed
+            self.change_gear(+1)
+            self.rb_pressed = True
+        else:
+            self.rb_pressed = False
+
+        if msg.buttons[6] == 1 and not self.lb_pressed:  # LB pressed
+            self.change_gear(-1)
+            self.lb_pressed = True
+        else:
+            self.lb_pressed = False
+
         # Update 0x28A (Bytes 0–6)
-        data_28A = [dir_x, dir_y, self.gear, mag_x_l, mag_x_h, mag_y_l, mag_y_h, 0]
+        data = [dir_x, dir_y, self.gear, mag_x_l, mag_x_h, mag_y_l, mag_y_h, 0]
+
         # self.get_logger().info(f"0x28A Bytes: {[hex(b) for b in data_28A]}")
         # self.get_logger().info(
         #     f"0x28A Update: dir_x={dir_x}, dir_y={dir_y}, gear={self.gear}, "
         #     f"mag_x={self.mag_x} (L={mag_x_l},H={mag_x_h}), "
         #     f"mag_y={self.mag_y} (L={mag_y_l},H={mag_y_h})"
         # )
-        self.set_cyclic_message(0x28A, data_28A)
+        self.set_cyclic_message(0x28A, data)
 
     def scale_joystick_value(self, raw_value: float):
         """
-        Scales joystick value (-1 to 1) to current gear:
-        - Linear from 0-1000 to 0-max_per_gear[self.gear]
-        - Values <20 are set to 0 (deadzone)
+        Scales joystick value (-1 to 1) to current (virtual)gear max
+        Values <20 are set to 0 automaticly in rovo (deadzone)
         """
         max_per_gear = {1: 320, 2: 500, 3: 750, 4: 1000}
-        value = abs(raw_value) * 1000
+
         # Scale linearly to gear maximum
-        scaled = value * max_per_gear.get(self.gear, 1000) / 1000
-        if scaled < 20:
+        target_max = max_per_gear.get(self.gear, 0)
+        scaled_value = abs(raw_value) * target_max
+
+        if scaled_value < 20:
             return 0
-        return int(scaled)
+
+        return int(scaled_value)
     
-    def update_speed_mode(self, joy_msg):
+    def update_automatic_mode(self, msg):
         """
-        Sets CAN frame for 0x28A in speed mode (RPM mode).
-        - Left stick controls direction + gear-dependent speed with LT
-        - Right stick controls direction + gear-dependent speed with RT
+        Sets CAN frame for 0x28A in speed mode (RPM mode) based on Twist message (linear.x, angular.z).
+        Calculates left/right wheel speeds and converts to RPM.
         """
+        linear_velocity = msg.linear.x 
+        angular_velocity = msg.angular.z
 
-        # --- Axes for directions (e.g. left_stick_y = axis 1, right_stick_y = axis 4) ---
-        left_axis = joy_msg.axes[1]   # Left stick (forward/backward)
-        right_axis = joy_msg.axes[4]  # Right stick (forward/backward)
+        left_velocity = linear_velocity + (self.wheelbase * angular_velocity / 2)
+        right_velocity = linear_velocity - (self.wheelbase * angular_velocity / 2)
 
-        # --- Triggers for speeds (e.g. LT = axis 2, RT = axis 5) ---
-        lt = (1 - joy_msg.axes[2]) / 2  # Axis -1 to 1 -> normalized to 0–1
-        rt = (1 - joy_msg.axes[5]) / 2
+        # Direction
+        if left_velocity >= 0:      
+            left_dir = 1            # Forwards
+        else:                       
+            left_dir = 2            # Backwards
 
-        # --- Gear-dependent max RPM ---
-        max_per_gear = {1: 800, 2: 1600, 3: 2400, 4: 3200}
-        max_rpm = max_per_gear.get(self.gear, 0)
+        if right_velocity >= 0:     
+            right_dir = 1           # Forwards
+        else:                       
+            right_dir = 2           # Backwards
 
-        # --- Helper function: Scales trigger to max_rpm ---
-        def scale_trigger(value):
-            rpm = int(value * max_rpm)
-            return rpm if rpm >= 20 else 0
-
-        # Left joystick Y-axis → Byte0
-        if joy_msg.axes[1] > 0:      # Upward
-            self.last_left_dir = 1
-        elif joy_msg.axes[1] < 0:    # Downward
-            self.last_left_dir = 2
-        # Right joystick Y-axis → Byte1
-        if joy_msg.axes[4] > 0:      # Upward
-            self.last_right_dir = 1
-        elif joy_msg.axes[4] < 0:    # Downward
-            self.last_right_dir = 2
-
-        # Set Byte0/Byte1 to stored direction
-        self.dir_left = self.last_left_dir
-        self.dir_right = self.last_right_dir
-
-        # --- Speeds from triggers ---
-        self.speed_left = scale_trigger(lt)
-        self.speed_right = scale_trigger(rt)
+        # --- Convert speeds to RPM ---
+        # n = v * 60 s/min * ü * 1/d*π 
+        left_rpm = int(abs(left_velocity) * 60.0 * self.gear_ratio * (1/(self.drive_diameter * math.pi)))
+        right_rpm = int(abs(right_velocity) * 60.0 * self.gear_ratio * (1/(self.drive_diameter * math.pi)))
 
         # --- CAN message for 0x28A ---
         data = [
-            self.dir_left,            # Byte0
-            self.dir_right,           # Byte1
-            self.gear,                # Byte2
-            self.speed_left & 0xFF,   # Byte3 (low)
-            (self.speed_left >> 8) & 0xFF,  # Byte4 (high)
-            self.speed_right & 0xFF,  # Byte5
-            (self.speed_right >> 8) & 0xFF, # Byte6
+            left_dir,            # Byte0
+            right_dir,           # Byte1
+            1,                        # Byte2 - set to 1 to enable motor control
+            left_rpm & 0xFF,   # Byte3 (low)
+            (left_rpm >> 8) & 0xFF,  # Byte4 (high)
+            right_rpm & 0xFF,  # Byte5
+            (right_rpm >> 8) & 0xFF, # Byte6
             self.alive_counter & 0xFF # Byte7 (Alive)
         ]
 
@@ -619,28 +592,6 @@ class ROVOController(Node):
 
         # Send
         self.set_cyclic_message(0x28A, data)
-
-    def emergency_shutdown(self):
-        """Emergency shutdown: stop all nodes and self"""
-        try:
-            # Stop-Signal for all other nodes
-            time.sleep(3.0)
-            stop_msg = Bool()
-            stop_msg.data = True
-            self.periphery_stop_publisher.publish(stop_msg)
-            self.running = False
-            self.get_logger().warn("Emergency stop signal sent to all periphery nodes")
-            time.sleep(0.5)
-            
-            # Stop node
-            self.get_logger().info("Shutting down xbox controller node...")
-
-            # Force exit the entire program
-            import sys
-            sys.exit(1)
-            
-        except Exception as e:
-            self.get_logger().error(f"Error during emergency shutdown: {e}")
 
     def destroy_node(self):
         """Clean shutdown"""
@@ -656,10 +607,10 @@ class ROVOController(Node):
         
 def main(args=None):
     rclpy.init(args=args)
-    controller = ROVOController()
+    controller = RovoDriverNode()
     
     try:
-        # Use spin_once with shutdown check like BNO085
+        # Use spin_once with shutdown check
         while rclpy.ok() and not controller.shutdown_requested:
             rclpy.spin_once(controller, timeout_sec=0.1)
             
