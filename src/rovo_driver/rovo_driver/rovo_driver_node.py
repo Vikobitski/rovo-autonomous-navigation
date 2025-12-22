@@ -6,7 +6,7 @@ from sensor_msgs.msg import Joy
 from std_msgs.msg import String, Bool, Int32
 from geometry_msgs.msg import Twist
 import can
-import threading
+#import threading
 import time
 import subprocess
 import os
@@ -37,11 +37,9 @@ class RovoDriverNode(Node):
         self.shutdown_can_on_exit = False  # Set to True in production, False for testing
         self.can_started_by_us = False  # Track if we started the interface
 
-        # Threading control
-        self.running = True
+        # CAN communication
         self.alive_counter = 0
         self.cyclic_messages = {}  # Dictionary for multiple messages
-        self.cyclic_lock = threading.Lock()  # Lock for thread safety
 
         # Controller pre-allocs
         self.gear = 0 # virtual gear for joystick mode
@@ -82,10 +80,8 @@ class RovoDriverNode(Node):
             self.get_logger().error(f"CAN interface error: {e}")
             return
         
-        # Start cyclic sender thread
-        self.cyclic_thread = threading.Thread(target=self.cyclic_sender)
-        self.cyclic_thread.daemon = True
-        self.cyclic_thread.start()
+        # Start cyclic sender timer (10ms)
+        self.create_timer(0.01, self.cyclic_sender)
         
         # Start initialization
         self.get_logger().info("ROVO Controller started - starting initialization...")
@@ -107,7 +103,6 @@ class RovoDriverNode(Node):
             '/rovo/speed',
             10
         )
-
 
         # Start CAN Notifier with a listener for speed updates
         # This will call self.speed_monitor whenever a message arrives
@@ -223,37 +218,34 @@ class RovoDriverNode(Node):
 
     def set_cyclic_message(self, can_id, data):
         """Set a message to be sent cyclically every 10ms"""
-        with self.cyclic_lock:
-            self.cyclic_messages[can_id] = data.copy() if data else None
+        #with self.cyclic_lock:
+        self.cyclic_messages[can_id] = data.copy() if data else None
         
-    def stop_cyclic_message(self, can_id=None):
-        """Stop sending a specific cyclic message or all messages"""
-        with self.cyclic_lock:
-            if can_id is None:
-                # Stop all
-                self.cyclic_messages.clear()
-            else:
-                # Stop only a specific ID
-                if can_id in self.cyclic_messages:
-                    del self.cyclic_messages[can_id]
+    # def stop_cyclic_message(self, can_id=None):
+    #     """Stop sending a specific cyclic message or all messages"""
+    #     with self.cyclic_lock:
+    #         if can_id is None:
+    #             # Stop all
+    #             self.cyclic_messages.clear()
+    #         else:
+    #             # Stop only a specific ID
+    #             if can_id in self.cyclic_messages:
+    #                 del self.cyclic_messages[can_id]
 
     def cyclic_sender(self):
-        """Thread that sends all cyclic messages every 10ms"""
-        while self.running:
-            with self.cyclic_lock:
-                for can_id, data in self.cyclic_messages.items():
-                    if data is not None:
-                        data_to_send = data.copy()
-                        
-                        # Special handling for alive counter on 0x28A
-                        if can_id == 0x28A and len(data_to_send) >= 8:
-                            data_to_send[7] = self.alive_counter
-                            self.alive_counter = (self.alive_counter + 1) % 256
-                        
-                        # Send message
-                        self.send_can_message(can_id, data_to_send)
+        """Timer callback that sends all cyclic messages every 10ms"""
+        #with self.cyclic_lock:
+        for can_id, data in self.cyclic_messages.items():
+            if data is not None:
+                data_to_send = data.copy()
                 
-            time.sleep(0.01)  # 10ms
+                # Special handling for alive counter on 0x28A
+                if can_id == 0x28A and len(data_to_send) >= 8:
+                    data_to_send[7] = self.alive_counter
+                    self.alive_counter = (self.alive_counter + 1) % 256
+                
+                # Send message
+                self.send_can_message(can_id, data_to_send)
     
     def send_can_message(self, can_id, data):
         """Send single CAN message"""
@@ -377,13 +369,9 @@ class RovoDriverNode(Node):
                 speed_msg.linear.x = linear_velocity * 3.6 # m/s to km/h -- REMOVE---
                 speed_msg.angular.z = angular_velocity * 57.2958 # rad/s to deg/s -- REMOVE---
                 self.speed_publisher.publish(speed_msg)
-                
-                # # Optional: Log occasionally
-                # if self.alive_counter % 100 == 0 and avg_speed > 0:
-                #     self.get_logger().info(f"Speed: {avg_speed:.3f}m/s (L:{left_rpm}, R:{right_rpm}RPM)")
             
             except Exception as e:
-                self.get_logger().warning(f"Speed calculation error: {e}")
+                self.get_logger().warning(f"Speed monitoring error: {e}")
 
     def joy_callback(self, msg):
         """Handle controller input"""
@@ -604,8 +592,7 @@ class RovoDriverNode(Node):
     def destroy_node(self):
         """Clean shutdown"""
         print("Shutting down...")
-        self.running = False
-        self.stop_cyclic_message()  # Stop all
+        #self.stop_cyclic_message()  # Stop all ---REMOVE---
         if hasattr(self, 'notifier'):
             self.notifier.stop()
         if hasattr(self, 'can_bus'):
