@@ -88,18 +88,11 @@ class RovoDriverNode(Node):
         self.cyclic_thread.start()
         
         # Start initialization
-        self.get_logger().info("ROVO Controller started - starting initialization...")
-        success = self.initialization_sequence()
-        
-        if success:
-            self.get_logger().info("ROVO successfully initialized!")
-            self.get_logger().info("Ready for controller inputs:")
-            self.get_logger().info("  B = Joystick mode")
-            self.get_logger().info("  Y = Automatic mode") 
-            self.get_logger().info("  A = Idle mode")
-        else:
-            self.get_logger().error("ROVO initialization failed!")
-            return
+        self.get_logger().info("ROVO Controller started - ready for controller inputs:")
+        self.get_logger().info("  B = Joystick mode")
+        self.get_logger().info("  Y = Automatic mode") 
+        self.get_logger().info("  A = Idle mode")
+
         
         # Publisher for speed data
         self.speed_publisher = self.create_publisher(
@@ -288,9 +281,9 @@ class RovoDriverNode(Node):
             time.sleep(0.01)
         return False
     
-    def initialization_sequence(self):
+    def activate_external_control(self):
         """Complete ROVO initialization"""
-        self.get_logger().info("Starting initialization...")
+        self.get_logger().info("Start activation of external control...")
         
         try:
             # Step 0 - Start alive counter with 0x28A
@@ -422,16 +415,23 @@ class RovoDriverNode(Node):
 
     def enter_joystick_mode(self):
         """Switch to joystick mode"""
-        self.get_logger().info("→ JOYSTICK MODE activated")
+
         self.gear = 0
         self.mode = RovoMode.JOYSTICK
+        
+        if not self.activate_external_control():
+            self.get_logger().error("Failed to activate external control")
+            return
+        self.get_logger().info("External control activated")
+
+        # # self.send_can_message(0x28A, [0] * 8)
+        # self.set_cyclic_message(0x28A, [0] * 8)
+        self.set_cyclic_message(0x18A, [0x02, 0x01, 0x00])  # Joystick mode command
+
         rovo_status_msg = Int32()
         rovo_status_msg.data = RovoMode.JOYSTICK.value
         self.rovo_mode_publisher.publish(rovo_status_msg)
-        # self.send_can_message(0x28A, [0] * 8)
-        self.set_cyclic_message(0x28A, [0] * 8)
-        self.get_logger().info("Gear 0 sent")
-        self.set_cyclic_message(0x18A, [0x02, 0x01, 0x00])  # Joystick mode command
+        self.get_logger().info("→ JOYSTICK MODE activated")
 
     def enter_automatic_mode(self):
         """Switch to automatic mode"""
@@ -452,7 +452,8 @@ class RovoDriverNode(Node):
         self.set_cyclic_message(0x28A, [0] * 8)
         self.get_logger().info("Speed control outputs set to 0")
 
-        self.set_cyclic_message(0x18A, [0x02, 0x00, 0x00])  # Idle mode command
+        #self.set_cyclic_message(0x18A, [0x02, 0x00, 0x00])  # Idle mode command
+        self.set_cyclic_message(0x18A, [0x00, 0x00, 0x00])  # Idle mode command
         self.mode = RovoMode.IDLE
         rovo_status_msg = Int32()
         rovo_status_msg.data = RovoMode.IDLE.value
