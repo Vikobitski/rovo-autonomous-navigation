@@ -15,8 +15,8 @@ import math
 from enum import Enum
 
 class RovoMode(Enum):
-    IDLE = 0
-    JOYSTICK = 1
+    ROVO_JOYSTICK = 0
+    XBOX_JOYSTICK = 1
     AUTOMATIC = 2
 
 class RovoDriverNode(Node):
@@ -30,7 +30,7 @@ class RovoDriverNode(Node):
 
         # Operating mode
         self.shutdown_requested = False
-        self.mode = RovoMode.IDLE
+        self.mode = RovoMode.ROVO_JOYSTICK
         
         # CAN interface configuration
         self.can_interface = 'can0'
@@ -45,7 +45,7 @@ class RovoDriverNode(Node):
         self.cyclic_lock = threading.Lock()  # Lock for thread safety
 
         # Controller pre-allocs
-        self.gear = 0 # virtual gear for joystick mode
+        self.gear = 0 # virtual gear for xbox joystick mode
         self.rb_pressed = False
         self.lb_pressed = False
         self.mag_x = 0 
@@ -59,6 +59,10 @@ class RovoDriverNode(Node):
             '/rovo/mode',
             10
         )
+
+        # Safety Check Timer and State
+        self.last_joy_time = 0.0
+        self.controller_check_timer = self.create_timer(1.0, self.check_controller_connection)
         
         # Diagnostics Publisher
         self.diag_publisher = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
@@ -92,10 +96,10 @@ class RovoDriverNode(Node):
         self.cyclic_thread.start()
         
         # Start initialization
-        self.get_logger().info("ROVO Controller started - ready for controller inputs:")
-        self.get_logger().info("  B = Joystick mode")
-        self.get_logger().info("  Y = Automatic mode") 
-        self.get_logger().info("  A = Idle mode")
+        self.get_logger().info("ROVO driver started - ready for controller inputs:")
+        self.get_logger().info("  B = XBOX_JOYSTICK mode")
+        self.get_logger().info("  Y = AUTOMATIC mode") 
+        self.get_logger().info("  A = ROVO_JOYSTICK mode")
 
         
         # Publisher for speed data
@@ -114,10 +118,10 @@ class RovoDriverNode(Node):
         """Check if controller exists and joy node is running"""
         # Check if controller device exists
         if not os.path.exists('/dev/input/js0'):
-            self.get_logger().error("No joystick found at /dev/input/js0")
+            self.get_logger().error("No controller found at /dev/input/js0")
             return False
         else:
-            self.get_logger().info("Xbox controller found")
+            self.get_logger().info("Controller found")
 
         # Check if joy node is publishing
         self.joy_received = False
@@ -407,18 +411,22 @@ class RovoDriverNode(Node):
         """Handle controller input"""
         if not self.joy_received:
             self.joy_received = True  # Just for checking if joy publishes
-            self.get_logger().info("First joystick message received!")
+            self.get_logger().info("First controller joystick message received!")
+            
+        self.last_joy_time = time.time()
+            
+        if not self.joy_received:
             return
         
         # Mode selection based on button presses
 
-        if msg.buttons[0] == 1:  # A - Idle mode
-            if self.mode != RovoMode.IDLE:
-                self.enter_idle_mode()
+        if msg.buttons[0] == 1:  # A - ROVO_JOYSTICK mode
+            if self.mode != RovoMode.ROVO_JOYSTICK:
+                self.enter_rovo_joystick_mode()
 
-        elif msg.buttons[1] == 1:  # B - Joystick mode
-            if self.mode != RovoMode.JOYSTICK:
-                self.enter_joystick_mode()
+        elif msg.buttons[1] == 1:  # B - XBOX_JOYSTICK mode
+            if self.mode != RovoMode.XBOX_JOYSTICK:
+                self.enter_xbox_joystick_mode()
 
         elif msg.buttons[4] == 1:  # Y - Automatic mode
             self.get_logger().info("Automatic mode not implemented")
@@ -426,8 +434,8 @@ class RovoDriverNode(Node):
             #     self.enter_automatic_mode()
 
         # Handle driving input only in active modes
-        if self.mode == RovoMode.JOYSTICK:
-            self.update_joystick_mode(msg)
+        if self.mode == RovoMode.XBOX_JOYSTICK:
+            self.update_xbox_joystick_mode(msg)
 
     def trajectory_control_callback(self, msg):
         """Handle trajectory control input"""
@@ -438,11 +446,11 @@ class RovoDriverNode(Node):
         if self.mode == RovoMode.AUTOMATIC:
             self.update_automatic_mode(msg)
 
-    def enter_joystick_mode(self):
+    def enter_xbox_joystick_mode(self):
         """Switch to joystick mode"""
 
         self.gear = 0
-        self.mode = RovoMode.JOYSTICK
+        self.mode = RovoMode.XBOX_JOYSTICK
         
         if not self.activate_external_control():
             self.get_logger().error("Failed to activate external control")
@@ -454,9 +462,9 @@ class RovoDriverNode(Node):
         self.set_cyclic_message(0x18A, [0x02, 0x01, 0x00])  # Joystick mode command
 
         rovo_status_msg = Int32()
-        rovo_status_msg.data = RovoMode.JOYSTICK.value
+        rovo_status_msg.data = RovoMode.XBOX_JOYSTICK.value
         self.rovo_mode_publisher.publish(rovo_status_msg)
-        self.get_logger().info("→ JOYSTICK MODE activated")
+        self.get_logger().info("→ XBOX JOYSTICK MODE activated")
 
     def enter_automatic_mode(self):
         """Switch to automatic mode"""
@@ -468,24 +476,18 @@ class RovoDriverNode(Node):
         self.send_can_message(0x28A, [0] * 8)
         self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
 
-    def enter_idle_mode(self):
-       
-        """Switch to idle mode"""
-        # set speed control outputs to 0
-        # self.send_can_message(0x28A, [0] * 8)
+    def enter_rovo_joystick_mode(self):     
+        """Switch to rovo joystick mode"""
         self.gear = 0
-        self.set_cyclic_message(0x28A, [0] * 8)
+        self.set_cyclic_message(0x28A, [0] * 8) # reset speed outputs
+        self.set_cyclic_message(0x18A, [0x00, 0x00, 0x00])  # Deactivate external control
         self.get_logger().info("Deactivated external control")
-
-        self.publish_diagnostic(DiagnosticStatus.WARN, "External control deactivated")
-
-        #self.set_cyclic_message(0x18A, [0x02, 0x00, 0x00])  # Idle mode command
-        self.set_cyclic_message(0x18A, [0x00, 0x00, 0x00])  # Idle mode command
-        self.mode = RovoMode.IDLE
+        self.publish_diagnostic(DiagnosticStatus.OK, "External control deactivated")
+        self.mode = RovoMode.ROVO_JOYSTICK
         rovo_status_msg = Int32()
-        rovo_status_msg.data = RovoMode.IDLE.value
+        rovo_status_msg.data = RovoMode.ROVO_JOYSTICK.value
         self.rovo_mode_publisher.publish(rovo_status_msg)
-        self.get_logger().info("→ IDLE MODE activated (Controller inputs ignored)")
+        self.get_logger().info("→ ROVO JOYSTICK MODE activated")
 
     def change_gear(self, direction: int):
         """
@@ -510,7 +512,7 @@ class RovoDriverNode(Node):
             self.get_logger().warn("Gear change blocked – speed not equal to zero")
             return False
 
-    def update_joystick_mode(self, msg):
+    def update_xbox_joystick_mode(self, msg):
 
         # --- Joystick control ---
         joystick_x = msg.axes[0]  # Left stick horizontal
@@ -643,6 +645,34 @@ class RovoDriverNode(Node):
         self.shutdown_can_interface()
         self.shutdown_requested = True
         
+    def check_controller_connection(self):
+        """
+        Periodically checks if the controller is still connected.
+        Checks both physical device file and topic activity.
+        """
+        # 1. Check physical device
+        device_exists = os.path.exists('/dev/input/js0')
+        
+        # 2. Check topic activity (watchdog)
+        # Only relevant if we have ever received a message
+        topic_active = True
+        if self.joy_received:
+            time_diff = time.time() - self.last_joy_time
+            if time_diff > 2.0:
+                topic_active = False
+
+        if not device_exists or not topic_active:
+            # If we are in XBOX_JOYSTICK mode, we need to switch to safe mode
+            if self.mode == RovoMode.XBOX_JOYSTICK:
+                reason = []
+                if not device_exists:
+                    reason.append("device /dev/input/js0 missing")
+                if not topic_active:
+                    reason.append(f"no joy messages for {time_diff:.1f}s")
+                
+                self.get_logger().warn(f"Controller disconnected ({', '.join(reason)}) - Switching to ROVO_JOYSTICK mode!")
+                self.enter_rovo_joystick_mode()
+                
 def main(args=None):
     rclpy.init(args=args)
     controller = RovoDriverNode()
