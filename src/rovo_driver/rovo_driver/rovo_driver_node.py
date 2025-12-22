@@ -23,7 +23,7 @@ class RovoDriverNode(Node):
         super().__init__('rovo_driver_node')
 
         # Rovo Mechanical parameters
-        self.wheelbase = 1.27 # [m]
+        self.wheelbase = 0.96 # [m] German: Radabstand
         self.gear_ratio = 16
         self.drive_diameter = 0.35 # [m]
 
@@ -108,10 +108,10 @@ class RovoDriverNode(Node):
             10
         )
 
-        # Start CAN receiver thread for speed data
-        self.can_receiver_thread = threading.Thread(target=self.speed_monitor)
-        self.can_receiver_thread.daemon = True
-        self.can_receiver_thread.start()
+
+        # Start CAN Notifier with a listener for speed updates
+        # This will call self.speed_monitor whenever a message arrives
+        self.notifier = can.Notifier(self.can_bus, [self.speed_monitor])
 
     def check_controller_and_joy(self):
         """Check if controller exists and joy node is running"""
@@ -345,46 +345,45 @@ class RovoDriverNode(Node):
             self.get_logger().error(f"Initialization failed: {e}")
             return False
         
-    def speed_monitor(self):
-        """Monitor CAN 0x30A messages for speed calculation"""
-        while self.running:
+    def speed_monitor(self, message):
+        """
+        Callback for CAN Notifier. 
+        Called immediately when a message is received.
+        """
+        if message.arbitration_id == 0x30A and len(message.data) >= 4:
             try:
-                message = self.can_bus.recv(timeout=0.1)
-                if message and message.arbitration_id == 0x30A and len(message.data) >= 4:
-                    # Extract RPM values
-                    self.left_rpm = int.from_bytes(message.data[0:2], byteorder='little', signed=True)
-                    self.right_rpm = int.from_bytes(message.data[2:4], byteorder='little', signed=True)
-                    
-                    # Calculate speed in m/s from RPM
-                    # v = (rpm / 60 s/min) * d * pi * 1/ü 
-                    left_velocity = (self.left_rpm / 60.0) * self.drive_diameter * math.pi / self.gear_ratio
-                    right_velocity = (self.right_rpm / 60.0) * self.drive_diameter * math.pi / self.gear_ratio
-                    
-                    # Calculate average speed
-                    linear_velocity = (left_velocity + right_velocity) / 2.0
+                # Extract RPM values
+                self.left_rpm = int.from_bytes(message.data[0:2], byteorder='little', signed=True)
+                self.right_rpm = int.from_bytes(message.data[2:4], byteorder='little', signed=True)
+                
+                # Calculate speed in m/s from RPM
+                # v = (rpm / 60 s/min) * d * pi * 1/ü 
+                left_velocity = (self.left_rpm / 60.0) * self.drive_diameter * math.pi / self.gear_ratio
+                right_velocity = (self.right_rpm / 60.0) * self.drive_diameter * math.pi / self.gear_ratio
+                
+                # Calculate average speed
+                linear_velocity = (left_velocity + right_velocity) / 2.0
 
-                    # experimental correction factor if needed:
-                    # avg_speed = avg_speed * 1.033 # for gear 1 at 0.16 m/S
-                    # # avg_speed = avg_speed * 1.04 # for gear 2 at 0.62 m/S
+                # experimental correction factor if needed:
+                # avg_speed = avg_speed * 1.033 # for gear 1 at 0.16 m/S
+                # # avg_speed = avg_speed * 1.04 # for gear 2 at 0.62 m/S
 
-                    # Calculate rotational speed in rad/s
-                    # w = (v_r - v_l) / 2a 
-                    # 2a == wheelbase
-                    angular_velocity = (right_velocity - left_velocity) / self.wheelbase
-                    
-                    speed_msg = Twist()
-                    speed_msg.linear.x = linear_velocity
-                    speed_msg.angular.z = angular_velocity
-                    self.speed_publisher.publish(speed_msg)
-                    
-                    # # Optional: Log occasionally
-                    # if self.alive_counter % 100 == 0 and avg_speed > 0:
-                    #     self.get_logger().info(f"Speed: {avg_speed:.3f}m/s (L:{left_rpm}, R:{right_rpm}RPM)")
-                        
+                # Calculate rotational speed in rad/s
+                # w = (v_r - v_l) / 2a 
+                # 2a == wheelbase
+                angular_velocity = (right_velocity - left_velocity) / self.wheelbase
+                
+                speed_msg = Twist()
+                speed_msg.linear.x = linear_velocity * 3.6 # m/s to km/h -- REMOVE---
+                speed_msg.angular.z = angular_velocity * 57.2958 # rad/s to deg/s -- REMOVE---
+                self.speed_publisher.publish(speed_msg)
+                
+                # # Optional: Log occasionally
+                # if self.alive_counter % 100 == 0 and avg_speed > 0:
+                #     self.get_logger().info(f"Speed: {avg_speed:.3f}m/s (L:{left_rpm}, R:{right_rpm}RPM)")
+            
             except Exception as e:
-                if self.running:
-                    self.get_logger().warning(f"Speed monitoring error: {e}")
-                time.sleep(0.01)
+                self.get_logger().warning(f"Speed calculation error: {e}")
 
     def joy_callback(self, msg):
         """Handle controller input"""
@@ -424,11 +423,13 @@ class RovoDriverNode(Node):
     def enter_joystick_mode(self):
         """Switch to joystick mode"""
         self.get_logger().info("→ JOYSTICK MODE activated")
+        self.gear = 0
         self.mode = RovoMode.JOYSTICK
         rovo_status_msg = Int32()
-        rovo_status_msg.data = RovoMode.JOYSTICK
+        rovo_status_msg.data = RovoMode.JOYSTICK.value
         self.rovo_mode_publisher.publish(rovo_status_msg)
-        self.send_can_message(0x28A, [0] * 8)
+        # self.send_can_message(0x28A, [0] * 8)
+        self.set_cyclic_message(0x28A, [0] * 8)
         self.get_logger().info("Gear 0 sent")
         self.set_cyclic_message(0x18A, [0x02, 0x01, 0x00])  # Joystick mode command
 
@@ -437,19 +438,26 @@ class RovoDriverNode(Node):
         self.get_logger().info("→ AUTOMATIC MODE activated")
         self.mode = RovoMode.AUTOMATIC
         rovo_status_msg = Int32()
-        rovo_status_msg.data = RovoMode.AUTOMATIC
+        rovo_status_msg.data = RovoMode.AUTOMATIC.value
         self.rovo_mode_publisher.publish(rovo_status_msg)
         self.send_can_message(0x28A, [0] * 8)
         self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
 
     def enter_idle_mode(self):
+       
         """Switch to idle mode"""
-        self.get_logger().info("→ IDLE MODE activated (Controller inputs ignored)")
+        # set speed control outputs to 0
+        # self.send_can_message(0x28A, [0] * 8)
+        self.gear = 0
+        self.set_cyclic_message(0x28A, [0] * 8)
+        self.get_logger().info("Speed control outputs set to 0")
+
+        self.set_cyclic_message(0x18A, [0x02, 0x00, 0x00])  # Idle mode command
         self.mode = RovoMode.IDLE
         rovo_status_msg = Int32()
-        rovo_status_msg.data = RovoMode.IDLE
+        rovo_status_msg.data = RovoMode.IDLE.value
         self.rovo_mode_publisher.publish(rovo_status_msg)
-        self.set_cyclic_message(0x18A, [0x02, 0x00, 0x00])  # Idle mode command
+        self.get_logger().info("→ IDLE MODE activated (Controller inputs ignored)")
 
     def change_gear(self, direction: int):
         """
@@ -489,9 +497,9 @@ class RovoDriverNode(Node):
             dir_x = 0
 
         # Direction Y (Byte1)
-        if self.joystick_y > 0.05:       # Forward (positive)
+        if joystick_y > 0.05:       # Forward (positive)
             dir_y = 1
-        elif self.joystick_y < -0.05:    # Backward (negative)
+        elif joystick_y < -0.05:    # Backward (negative)
             dir_y = 2
         else:
             dir_y = 0
@@ -507,17 +515,17 @@ class RovoDriverNode(Node):
         mag_y_h = (self.mag_y >> 8) & 0xFF
 
         # --- Gear control ---
-        if msg.buttons[7] == 1 and not self.rb_pressed:  # RB pressed
+        if (msg.buttons[7] == 1) and not self.rb_pressed:  # RB pressed
             self.change_gear(+1)
             self.rb_pressed = True
-        else:
-            self.rb_pressed = False
+        
+        self.rb_pressed = (msg.buttons[7] == 1)
 
-        if msg.buttons[6] == 1 and not self.lb_pressed:  # LB pressed
+        if (msg.buttons[6] == 1) and not self.lb_pressed:  # LB pressed
             self.change_gear(-1)
             self.lb_pressed = True
-        else:
-            self.lb_pressed = False
+        
+        self.lb_pressed = (msg.buttons[6] == 1)
 
         # Update 0x28A (Bytes 0–6)
         data = [dir_x, dir_y, self.gear, mag_x_l, mag_x_h, mag_y_l, mag_y_h, 0]
@@ -598,6 +606,8 @@ class RovoDriverNode(Node):
         print("Shutting down...")
         self.running = False
         self.stop_cyclic_message()  # Stop all
+        if hasattr(self, 'notifier'):
+            self.notifier.stop()
         if hasattr(self, 'can_bus'):
             self.can_bus.shutdown()
         
