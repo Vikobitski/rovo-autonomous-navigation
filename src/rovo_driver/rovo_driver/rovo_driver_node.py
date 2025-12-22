@@ -4,7 +4,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from std_msgs.msg import String, Bool, Int32
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, TwistStamped
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 import can
 import threading
@@ -62,7 +62,6 @@ class RovoDriverNode(Node):
         
         # Diagnostics Publisher
         self.diag_publisher = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
-
         
         # Controller and ROS2 checks FIRST (before CAN setup)
         if not self.check_controller_and_joy():
@@ -101,7 +100,7 @@ class RovoDriverNode(Node):
         
         # Publisher for speed data
         self.speed_publisher = self.create_publisher(
-            Twist,
+            TwistStamped,
             '/rovo/speed',
             10
         )
@@ -390,9 +389,11 @@ class RovoDriverNode(Node):
                 # 2a == wheelbase
                 angular_velocity = (right_velocity - left_velocity) / self.wheelbase
                 
-                speed_msg = Twist()
-                speed_msg.linear.x = linear_velocity * 3.6 # m/s to km/h -- REMOVE---
-                speed_msg.angular.z = angular_velocity * 57.2958 # rad/s to deg/s -- REMOVE---
+                speed_msg = TwistStamped()
+                speed_msg.header.stamp = self.get_clock().now().to_msg()
+                speed_msg.header.frame_id = "base_link"
+                speed_msg.twist.linear.x = linear_velocity
+                speed_msg.twist.angular.z = angular_velocity
                 self.speed_publisher.publish(speed_msg)
                 
                 # # Optional: Log occasionally
@@ -474,7 +475,9 @@ class RovoDriverNode(Node):
         # self.send_can_message(0x28A, [0] * 8)
         self.gear = 0
         self.set_cyclic_message(0x28A, [0] * 8)
-        self.get_logger().info("Speed control outputs set to 0")
+        self.get_logger().info("Deactivated external control")
+
+        self.publish_diagnostic(DiagnosticStatus.WARN, "External control deactivated")
 
         #self.set_cyclic_message(0x18A, [0x02, 0x00, 0x00])  # Idle mode command
         self.set_cyclic_message(0x18A, [0x00, 0x00, 0x00])  # Idle mode command
