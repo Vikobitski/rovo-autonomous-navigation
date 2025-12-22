@@ -5,6 +5,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from std_msgs.msg import String, Bool, Int32
 from geometry_msgs.msg import Twist
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 import can
 import threading
 import time
@@ -58,6 +59,10 @@ class RovoDriverNode(Node):
             '/rovo/mode',
             10
         )
+        
+        # Diagnostics Publisher
+        self.diag_publisher = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+
         
         # Controller and ROS2 checks FIRST (before CAN setup)
         if not self.check_controller_and_joy():
@@ -332,11 +337,30 @@ class RovoDriverNode(Node):
                 # self.get_logger().info("In Step 6.2: 02 00 02 received")
                 pass
             
+            # Send Success Diagnostic
+            self.publish_diagnostic(DiagnosticStatus.OK, "External control activated successfully")
             return True
             
         except Exception as e:
-            self.get_logger().error(f"Initialization failed: {e}")
+            self.get_logger().error(f"External control activation failed: {e}")
+            # Send Error Diagnostic
+            self.publish_diagnostic(DiagnosticStatus.ERROR, f"External control activation failed: {e}")
             return False
+
+    def publish_diagnostic(self, level, message):
+        """Helper to publish a single diagnostic message"""
+        diag_array = DiagnosticArray()
+        diag_array.header.stamp = self.get_clock().now().to_msg()
+
+        status_msg = DiagnosticStatus()
+        status_msg.name = "rovo_driver_node: External Control"
+        status_msg.hardware_id = self.can_interface
+        status_msg.level = level
+        status_msg.message = message
+        
+        diag_array.status.append(status_msg)
+        self.diag_publisher.publish(diag_array)
+
         
     def speed_monitor(self, message):
         """
