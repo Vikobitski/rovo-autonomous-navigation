@@ -44,7 +44,7 @@ def generate_launch_description():
         # === HIER DIE LÖSUNG ===
         # Wir zwingen rosbridge, Port 9090 zu verwenden, 
         # um die Kollision mit dem 'port'-Argument (2101) des ntrip_client zu verhindern.
-        launch_arguments={'port': '9090'}.items()
+        launch_arguments={'port': '9090', 'delay_between_messages': '0.0'}.items()
     )
 
     ublox_gps_launch = IncludeLaunchDescription(

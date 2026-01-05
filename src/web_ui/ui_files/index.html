@@ -109,62 +109,6 @@
       /* CSS-Trick, um den Drehpunkt in die Mitte zu legen */
       transform-origin: center center;
     }
-
-    /* Toggle Switch Styles */
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 60px;
-      height: 34px;
-      vertical-align: middle;
-      margin-left: 10px;
-    }
-
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: #ccc;
-      -webkit-transition: .4s;
-      transition: .4s;
-      border-radius: 34px;
-    }
-
-    .slider:before {
-      position: absolute;
-      content: "";
-      height: 26px;
-      width: 26px;
-      left: 4px;
-      bottom: 4px;
-      background-color: white;
-      -webkit-transition: .4s;
-      transition: .4s;
-      border-radius: 50%;
-    }
-
-    input:checked+.slider {
-      background-color: #2196F3;
-    }
-
-    input:focus+.slider {
-      box-shadow: 0 0 1px #2196F3;
-    }
-
-    input:checked+.slider:before {
-      -webkit-transform: translateX(26px);
-      -ms-transform: translateX(26px);
-      transform: translateX(26px);
-    }
   </style>
 </head>
 
@@ -250,14 +194,17 @@
 
     <hr>
 
-    <div style="display: flex; align-items: center; margin-top: 10px;">
+    <div style="margin-top: 10px;">
       <div>
         <strong>Mode:</strong> <span id="current-mode">MANUAL</span>
       </div>
-      <label class="switch">
-        <input type="checkbox" id="mode-toggle" onchange="toggleMode()">
-        <span class="slider"></span>
-      </label>
+      <div style="margin-top: 5px;">
+        <button onclick="setMode(0)"
+          style="margin-right: 5px; padding: 8px 12px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;">MANUAL</button>
+        <button onclick="setMode(2)"
+          style="padding: 8px 12px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">AUTO
+          WATCHDOG</button>
+      </div>
     </div>
   </div>
 
@@ -506,32 +453,27 @@
       // 0: Manual, 1: Auto, 2: Auto Watchdog
       if (msg.data === 0) {
         modeText = "MANUAL";
-        document.getElementById('mode-toggle').checked = false;
         stopHeartbeat();
       } else if (msg.data === 1) {
         modeText = "AUTOMATIC";
-        // Ensure toggle is off if just pure auto (should usually use 2 via UI)
-        // document.getElementById('mode-toggle').checked = true; 
       } else if (msg.data === 2) {
         modeText = "WATCHDOG";
-        document.getElementById('mode-toggle').checked = true;
         startHeartbeat();
       }
 
       document.getElementById('current-mode').innerText = modeText;
     });
 
-    function toggleMode() {
-      var isChecked = document.getElementById('mode-toggle').checked;
-      var newMode = isChecked ? 2 : 0; // 2 = Auto Watchdog, 0 = Manual
-
+    function setMode(newMode) {
       var msg = new ROSLIB.Message({
         data: newMode
       });
       setModeTopic.publish(msg);
       console.log("Set mode to: " + newMode);
 
-      if (isChecked) {
+      // Heartbeat wird durch den modeTopic callback gesteuert, 
+      // aber wir können es auch hier direkt triggern für schnelleres Feedback
+      if (newMode === 2) {
         startHeartbeat();
       } else {
         stopHeartbeat();
