@@ -2,22 +2,21 @@
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Joy
-from std_msgs.msg import String, Bool, Int32
-from geometry_msgs.msg import Twist, TwistStamped
-from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
+from std_msgs.msg import Int32, Bool
+from geometry_msgs.msg import TwistStamped
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
 import can
 import threading
 import time
 import subprocess
-import os
+
 import math 
 from enum import Enum
 
 class RovoMode(Enum):
-    ROVO_JOYSTICK = 0
-    XBOX_JOYSTICK = 1
-    AUTOMATIC = 2
+    MANUAL = 0 # Manual / Passive
+    AUTOMATIC = 1 # Automatic / Active
+    AUTOMATIC_WATCHDOG = 2 # Automatic with 1s timeout
 
 class RovoDriverNode(Node):
     def __init__(self):
@@ -30,7 +29,7 @@ class RovoDriverNode(Node):
 
         # Operating mode
         self.shutdown_requested = False
-        self.mode = RovoMode.ROVO_JOYSTICK
+        self.mode = RovoMode.MANUAL
         
         # CAN interface configuration
         self.can_interface = 'can0'
@@ -44,40 +43,56 @@ class RovoDriverNode(Node):
         self.cyclic_messages = {}  # Dictionary for multiple messages
         self.cyclic_lock = threading.Lock()  # Lock for thread safety
 
-        # Controller pre-allocs
-        self.gear = 0 # virtual gear for xbox joystick mode
-        self.rb_pressed = False
-        self.lb_pressed = False
-        self.mag_x = 0 
-        self.mag_y = 0
-        self.left_rpm = 0
-        self.right_rpm = 0
+
+
+        self.speed_setpoint_received = False
                 
         # Publisher for rovo mode
-        self.rovo_mode_publisher = self.create_publisher(
+        self.mode_publisher = self.create_publisher(
             Int32,
             '/rovo/mode',
             10
         )
+        
+        # Subscriber for mode setting
+        self.mode_subscription = self.create_subscription(
+            Int32,
+            '/rovo/set_mode',
+            self.set_mode_callback,
+            10
+        )
 
-        # Safety Check Timer and State
-        self.last_joy_time = 0.0
-        self.controller_check_timer = self.create_timer(1.0, self.check_controller_connection)
+        # Watchdog Timer (1.0s timeout)
+        self.watchdog_timer = self.create_timer(1.0, self.watchdog_timeout)
+        self.watchdog_timer.cancel() # Start cancelled
+        # Publisher for speed data
+        self.speed_publisher = self.create_publisher(
+            TwistStamped,
+            '/rovo/speed',
+            10
+        )
+        
+        # Subscription for speed setpoint
+        self.trajectory_control_subscription = self.create_subscription(
+            TwistStamped,
+            '/rovo/set_speed',
+            self.trajectory_control_callback,
+            20
+        )
+
+        # Subscriber for heartbeat
+        self.heartbeat_subscription = self.create_subscription(
+            Bool,
+            '/rovo/heartbeat',
+            self.heartbeat_callback,
+            10
+        )
+
         
         # Diagnostics Publisher
         self.diag_publisher = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
         
-        # Controller and ROS2 checks FIRST (before CAN setup)
-        if not self.check_controller_and_joy():
-            self.get_logger().error("\033[91mController or Joy node not available - terminating program\033[0m")
-            return
-
-        # # WIEDER EINKOMMENTIEREN, WENN REGELUNG IMPLEMENTIERT IST
-        # if not self.check_trajectory_control():
-        #     self.get_logger().error("\033[91mTrajectory control node not available - terminating program\033[0m")
-        #     return
-        
-        # Setup CAN interface only after controller checks pass
+        # Setup CAN interface
         if not self.setup_can_interface():
             self.get_logger().error("\033[91mCAN interface setup failed!\033[0m")
             return
@@ -96,74 +111,13 @@ class RovoDriverNode(Node):
         self.cyclic_thread.start()
         
         # Start initialization
-        self.get_logger().info("ROVO driver started - ready for controller inputs:")
-        self.get_logger().info("  B = XBOX_JOYSTICK mode")
-        self.get_logger().info("  Y = AUTOMATIC mode") 
-        self.get_logger().info("  A = ROVO_JOYSTICK mode")
-
-        
-        # Publisher for speed data
-        self.speed_publisher = self.create_publisher(
-            TwistStamped,
-            '/rovo/speed',
-            10
-        )
-
+        self.get_logger().info("ROVO driver started - ready for commands")
+        self.get_logger().info("  Send 1 to /rovo/set_mode for AUTOMATIC mode") 
+        self.get_logger().info("  Send 0 to /rovo/set_mode for MANUAL mode")
 
         # Start CAN Notifier with a listener for speed updates
         # This will call self.speed_monitor whenever a message arrives
         self.notifier = can.Notifier(self.can_bus, [self.speed_monitor])
-
-    def check_controller_and_joy(self):
-        """Check if controller exists and joy node is running"""
-        # Check if controller device exists
-        if not os.path.exists('/dev/input/js0'):
-            self.get_logger().error("No controller found at /dev/input/js0")
-            return False
-        else:
-            self.get_logger().info("Controller found")
-
-        # Check if joy node is publishing
-        self.joy_received = False
-        self.joy_subscription = self.create_subscription(Joy, 'joy', self.joy_callback, 10)
-
-        # Wait for Joy messages (max 7 seconds)
-        self.get_logger().info("Waiting for Joy node...")
-        start_time = time.time()
-        timeout = 7.0
-
-        while not self.joy_received and (time.time() - start_time) < timeout:
-            rclpy.spin_once(self, timeout_sec=0.1)  # Process callbacks for 0.1s
-            
-        if not self.joy_received:
-            self.get_logger().error(f"Joy node is not running")
-            return False
-        else:
-            self.get_logger().info("Joy node is active")
-            return True
-
-    def check_trajectory_control(self):
-        """Check if trajectory control is active"""
-        self.trajectory_control_subscription = self.create_subscription(
-            Twist,
-            '/rovo/speed_setpoint',
-            self.trajectory_control_callback,
-            20
-        )
-
-        self.get_logger().info("Waiting for Trajectory control node...")
-        start_time = time.time()
-        timeout = 7.0
-        
-        while not self.speed_setpoint_received and (time.time() - start_time) < timeout:
-            rclpy.spin_once(self, timeout_sec=0.1)  # Process callbacks for 0.1s
-
-        if not self.speed_setpoint_received:
-            self.get_logger().error("Trajectory control node is not running")
-            return False
-        else:
-            self.get_logger().info("Trajectory control node is active")
-            return True
 
     def setup_can_interface(self):
         """Setup CAN interface with automatic configuration"""
@@ -261,7 +215,6 @@ class RovoDriverNode(Node):
         try:
             msg = can.Message(arbitration_id=can_id, data=data, is_extended_id=False)
             self.can_bus.send(msg)
-            # self.get_logger().info(f"Sending ID={hex(can_id)}: DLC={len(msg.data)}, DATA={msg.data}")
             return True
         except Exception as e:
             self.get_logger().error(f"CAN send error {hex(can_id)}: {e}")
@@ -283,7 +236,6 @@ class RovoDriverNode(Node):
         while time.time() - start_time < timeout:
             msg = self.receive_can_message(expected_id, 0.1)
             if msg and len(msg.data) >= 3:
-                # self.get_logger().info(f"Received: ID=0x{msg.arbitration_id:X}, DATA={[hex(b) for b in msg.data]}")
                 if msg.data[0] == expected_byte0 and msg.data[2] == expected_byte2:
                     return True
             time.sleep(0.01)
@@ -295,50 +247,33 @@ class RovoDriverNode(Node):
         
         try:
             # Step 0 - Start alive counter with 0x28A
-            # self.get_logger().info("Step 0, start alive counter on 28A")
             self.set_cyclic_message(0x28A, [0] * 8)  # Will be updated in cyclic_sender
 
             # Step 1
-            # self.get_logger().info("Step 1, sending to 18A once --> 00 00 00")
             if not self.send_can_message(0x18A, [0x00, 0x00, 0x00]):
                 raise Exception("Step 1 failed")
             
             # Step 2
-            # self.get_logger().info("Step 2, checking on 20A for 02 00 00")
             if not self.wait_for_response(0x20A, 0x02, 0x00):
                 raise Exception("Step 2 failed")
-            else:
-                # self.get_logger().info("In Step 2: 02 00 00 received")
-                pass
             
             # Step 3 - Start cyclic 0x18A with 0x01
-            # self.get_logger().info("Step 3, sending to 18A cyclic (every 10 ms) --> 01 00 00")
             self.set_cyclic_message(0x18A, [0x01, 0x00, 0x00])
 
             # Step 4
-            # self.get_logger().info("Step 4, checking on 20A for 02 00 01")
             if not self.wait_for_response(0x20A, 0x02, 0x01):
                 raise Exception("Step 3/4 failed")
-            else:
-                # self.get_logger().info("In Step 4: 02 00 01 received")
-                pass
             
             # Step 5 - Change to 0x02
-            # self.get_logger().info("Step 5, sending to 18A cyclic (every 10 ms) --> 02 00 00")
             self.set_cyclic_message(0x18A, [0x02, 0x00, 0x00])
             
             # Step 6.1 - Send password
-            # self.get_logger().info("Step 6.1, sending password")
             if not self.send_can_message(0x38A, [0x4D, 0x41, 0x54, 0x54, 0x52, 0x4F]):
-                raise Exception("Step 6 failed")
+                raise Exception("Step 6.1 failed")
             
             # Step 6.2
-            # self.get_logger().info("Step 6.2, checking on 20A for 02 00 02")
             if not self.wait_for_response(0x20A, 0x02, 0x02):
-                raise Exception("Step 6.1 failed")
-            else:
-                # self.get_logger().info("In Step 6.2: 02 00 02 received")
-                pass
+                raise Exception("Step 6.2 failed")
             
             # Send Success Diagnostic
             self.publish_diagnostic(DiagnosticStatus.OK, "External control activated successfully")
@@ -346,7 +281,6 @@ class RovoDriverNode(Node):
             
         except Exception as e:
             self.get_logger().error(f"External control activation failed: {e}")
-            # Send Error Diagnostic
             self.publish_diagnostic(DiagnosticStatus.ERROR, f"External control activation failed: {e}")
             return False
 
@@ -373,24 +307,17 @@ class RovoDriverNode(Node):
         if message.arbitration_id == 0x30A and len(message.data) >= 4:
             try:
                 # Extract RPM values
-                self.left_rpm = int.from_bytes(message.data[0:2], byteorder='little', signed=True)
-                self.right_rpm = int.from_bytes(message.data[2:4], byteorder='little', signed=True)
+                left_rpm = int.from_bytes(message.data[0:2], byteorder='little', signed=True)
+                right_rpm = int.from_bytes(message.data[2:4], byteorder='little', signed=True)
                 
                 # Calculate speed in m/s from RPM
-                # v = (rpm / 60 s/min) * d * pi * 1/ü 
-                left_velocity = (self.left_rpm / 60.0) * self.drive_diameter * math.pi / self.gear_ratio
-                right_velocity = (self.right_rpm / 60.0) * self.drive_diameter * math.pi / self.gear_ratio
+                left_velocity = (left_rpm / 60.0) * self.drive_diameter * math.pi / self.gear_ratio
+                right_velocity = (right_rpm / 60.0) * self.drive_diameter * math.pi / self.gear_ratio
                 
                 # Calculate average speed
                 linear_velocity = (left_velocity + right_velocity) / 2.0
 
-                # experimental correction factor if needed:
-                # avg_speed = avg_speed * 1.033 # for gear 1 at 0.16 m/S
-                # # avg_speed = avg_speed * 1.04 # for gear 2 at 0.62 m/S
-
                 # Calculate rotational speed in rad/s
-                # w = (v_r - v_l) / 2a 
-                # 2a == wheelbase
                 angular_velocity = (right_velocity - left_velocity) / self.wheelbase
                 
                 speed_msg = TwistStamped()
@@ -400,42 +327,27 @@ class RovoDriverNode(Node):
                 speed_msg.twist.angular.z = angular_velocity
                 self.speed_publisher.publish(speed_msg)
                 
-                # # Optional: Log occasionally
-                # if self.alive_counter % 100 == 0 and avg_speed > 0:
-                #     self.get_logger().info(f"Speed: {avg_speed:.3f}m/s (L:{left_rpm}, R:{right_rpm}RPM)")
-            
             except Exception as e:
                 self.get_logger().warning(f"Speed calculation error: {e}")
 
-    def joy_callback(self, msg):
-        """Handle controller input"""
-        if not self.joy_received:
-            self.joy_received = True  # Just for checking if joy publishes
-            self.get_logger().info("First controller joystick message received!")
-            
-        self.last_joy_time = time.time()
-            
-        if not self.joy_received:
-            return
+    def set_mode_callback(self, msg):
+        """Handle mode switching from external topic"""
+        requested_mode = msg.data
         
-        # Mode selection based on button presses
+        if requested_mode == 0: # Manual request
+            if self.mode != RovoMode.MANUAL:
+                self.enter_manual_mode()
+                
+        elif requested_mode == 1: # Automatic request
+            if self.mode != RovoMode.AUTOMATIC:
+                self.enter_automatic_mode()
 
-        if msg.buttons[0] == 1:  # A - ROVO_JOYSTICK mode
-            if self.mode != RovoMode.ROVO_JOYSTICK:
-                self.enter_rovo_joystick_mode()
+        elif requested_mode == 2: # Automatic Watchdog request
+            if self.mode != RovoMode.AUTOMATIC_WATCHDOG:
+                self.enter_automatic_watchdog_mode()
 
-        elif msg.buttons[1] == 1:  # B - XBOX_JOYSTICK mode
-            if self.mode != RovoMode.XBOX_JOYSTICK:
-                self.enter_xbox_joystick_mode()
-
-        elif msg.buttons[4] == 1:  # Y - Automatic mode
-            self.get_logger().info("Automatic mode not implemented")
-            # if self.mode != RovoMode.AUTOMATIC:
-            #     self.enter_automatic_mode()
-
-        # Handle driving input only in active modes
-        if self.mode == RovoMode.XBOX_JOYSTICK:
-            self.update_xbox_joystick_mode(msg)
+        else:
+            self.get_logger().warn(f"Unknown mode requested: {requested_mode}")
 
     def trajectory_control_callback(self, msg):
         """Handle trajectory control input"""
@@ -443,154 +355,69 @@ class RovoDriverNode(Node):
             self.speed_setpoint_received = True
             self.get_logger().info("First speed setpoint message received!")
 
-        if self.mode == RovoMode.AUTOMATIC:
+        if self.mode == RovoMode.AUTOMATIC or self.mode == RovoMode.AUTOMATIC_WATCHDOG:
             self.update_automatic_mode(msg)
-
-    def enter_xbox_joystick_mode(self):
-        """Switch to joystick mode"""
-
-        self.gear = 0
-        self.mode = RovoMode.XBOX_JOYSTICK
-        
-        if not self.activate_external_control():
-            self.get_logger().error("Failed to activate external control")
-            return
-        self.get_logger().info("External control activated")
-
-        # # self.send_can_message(0x28A, [0] * 8)
-        # self.set_cyclic_message(0x28A, [0] * 8)
-        self.set_cyclic_message(0x18A, [0x02, 0x01, 0x00])  # Joystick mode command
-
-        rovo_status_msg = Int32()
-        rovo_status_msg.data = RovoMode.XBOX_JOYSTICK.value
-        self.rovo_mode_publisher.publish(rovo_status_msg)
-        self.get_logger().info("→ XBOX JOYSTICK MODE activated")
 
     def enter_automatic_mode(self):
         """Switch to automatic mode"""
         self.get_logger().info("→ AUTOMATIC MODE activated")
+        
+        # Ensure watchdog is off
+        self.watchdog_timer.cancel()
+        
+        if not self.activate_external_control():
+            self.get_logger().error("Failed to activate external control")
+            return
+
         self.mode = RovoMode.AUTOMATIC
         rovo_status_msg = Int32()
         rovo_status_msg.data = RovoMode.AUTOMATIC.value
-        self.rovo_mode_publisher.publish(rovo_status_msg)
-        self.send_can_message(0x28A, [0] * 8)
+        self.mode_publisher.publish(rovo_status_msg)
+        
+        # Initialize speed mode command
         self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
+        self.send_can_message(0x28A, [0] * 8)
 
-    def enter_rovo_joystick_mode(self):     
-        """Switch to rovo joystick mode"""
-        self.gear = 0
+    def enter_automatic_watchdog_mode(self):
+        """Switch to automatic mode with watchdog"""
+        self.get_logger().info("→ AUTOMATIC WATCHDOG MODE activated")
+        
+        if not self.activate_external_control():
+            self.get_logger().error("Failed to activate external control")
+            return
+
+        self.mode = RovoMode.AUTOMATIC_WATCHDOG
+        self.watchdog_timer.reset() # Start/Reset watchdog timer
+        
+        rovo_status_msg = Int32()
+        rovo_status_msg.data = RovoMode.AUTOMATIC_WATCHDOG.value
+        self.mode_publisher.publish(rovo_status_msg)
+        
+        self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
+        self.send_can_message(0x28A, [0] * 8)
+
+    def enter_manual_mode(self):     
+        """Switch to manual mode"""
+        self.watchdog_timer.cancel() # Stop watchdog if running
         self.set_cyclic_message(0x28A, [0] * 8) # reset speed outputs
         self.set_cyclic_message(0x18A, [0x00, 0x00, 0x00])  # Deactivate external control
         self.get_logger().info("Deactivated external control")
         self.publish_diagnostic(DiagnosticStatus.OK, "External control deactivated")
-        self.mode = RovoMode.ROVO_JOYSTICK
-        rovo_status_msg = Int32()
-        rovo_status_msg.data = RovoMode.ROVO_JOYSTICK.value
-        self.rovo_mode_publisher.publish(rovo_status_msg)
-        self.get_logger().info("→ ROVO JOYSTICK MODE activated")
-
-    def change_gear(self, direction: int):
-        """
-        Changes gear by +1 or -1 (direction) if allowed.
-        direction = +1 → shift up
-        direction = -1 → shift down
-        """
-
-        if self.gear_change_possible():
-            new_gear = self.gear + direction
-            self.gear = self.clamp(new_gear, 0, 4) # Clamp gear to valid range (0-4)
-            self.get_logger().info(f"→ Gear changed to: {self.gear}")
-
-    def clamp(self, n, minn, maxn):
-        return max(minn, min(n, maxn))
-
-    def gear_change_possible(self) -> bool:
-        """Checks if gear change is allowed (only at zero speed)."""
-        if (self.left_rpm == 0 and self.right_rpm == 0):
-            return True
-        else:
-            self.get_logger().warn("Gear change blocked – speed not equal to zero")
-            return False
-
-    def update_xbox_joystick_mode(self, msg):
-
-        # --- Joystick control ---
-        joystick_x = msg.axes[0]  # Left stick horizontal
-        joystick_y = msg.axes[1]  # Left stick vertical
-
-        # Direction X (Byte0)
-        if joystick_x < -0.05:      # Right (negative)
-            dir_x = 1
-        elif joystick_x > 0.05:     # Left (positive)
-            dir_x = 2
-        else:
-            dir_x = 0
-
-        # Direction Y (Byte1)
-        if joystick_y > 0.05:       # Forward (positive)
-            dir_y = 1
-        elif joystick_y < -0.05:    # Backward (negative)
-            dir_y = 2
-        else:
-            dir_y = 0
-
-        # Magnitude X (Byte3+4)
-        self.mag_x = self.scale_joystick_value(joystick_x)
-        mag_x_l = self.mag_x & 0xFF
-        mag_x_h = (self.mag_x >> 8) & 0xFF
-
-        # Magnitude Y (Byte5+6)
-        self.mag_y = self.scale_joystick_value(joystick_y)
-        mag_y_l = self.mag_y & 0xFF
-        mag_y_h = (self.mag_y >> 8) & 0xFF
-
-        # --- Gear control ---
-        if (msg.buttons[7] == 1) and not self.rb_pressed:  # RB pressed
-            self.change_gear(+1)
-            self.rb_pressed = True
+        self.mode = RovoMode.MANUAL
         
-        self.rb_pressed = (msg.buttons[7] == 1)
+        mode_msg = Int32()
+        mode_msg.data = RovoMode.MANUAL.value
+        self.mode_publisher.publish(mode_msg)
+        self.get_logger().info("→ ROVO JOYSTICK (MANUAL) MODE activated")
 
-        if (msg.buttons[6] == 1) and not self.lb_pressed:  # LB pressed
-            self.change_gear(-1)
-            self.lb_pressed = True
-        
-        self.lb_pressed = (msg.buttons[6] == 1)
-
-        # Update 0x28A (Bytes 0–6)
-        data = [dir_x, dir_y, self.gear, mag_x_l, mag_x_h, mag_y_l, mag_y_h, 0]
-
-        # self.get_logger().info(f"0x28A Bytes: {[hex(b) for b in data_28A]}")
-        # self.get_logger().info(
-        #     f"0x28A Update: dir_x={dir_x}, dir_y={dir_y}, gear={self.gear}, "
-        #     f"mag_x={self.mag_x} (L={mag_x_l},H={mag_x_h}), "
-        #     f"mag_y={self.mag_y} (L={mag_y_l},H={mag_y_h})"
-        # )
-        self.set_cyclic_message(0x28A, data)
-
-    def scale_joystick_value(self, raw_value: float):
-        """
-        Scales joystick value (-1 to 1) to current (virtual)gear max
-        Values <20 are set to 0 automaticly in rovo (deadzone)
-        """
-        max_per_gear = {1: 320, 2: 500, 3: 750, 4: 1000}
-
-        # Scale linearly to gear maximum
-        target_max = max_per_gear.get(self.gear, 0)
-        scaled_value = abs(raw_value) * target_max
-
-        if scaled_value < 20:
-            return 0
-
-        return int(scaled_value)
     
     def update_automatic_mode(self, msg):
         """
         Sets CAN frame for 0x28A in speed mode (RPM mode) based on Twist message (linear.x, angular.z).
         Calculates left/right wheel speeds and converts to RPM.
         """
-        linear_velocity = msg.linear.x 
-        angular_velocity = msg.angular.z
+        linear_velocity = msg.twist.linear.x 
+        angular_velocity = msg.twist.angular.z
 
         left_velocity = linear_velocity + (self.wheelbase * angular_velocity / 2)
         right_velocity = linear_velocity - (self.wheelbase * angular_velocity / 2)
@@ -613,24 +440,29 @@ class RovoDriverNode(Node):
 
         # --- CAN message for 0x28A ---
         data = [
-            left_dir,            # Byte0
-            right_dir,           # Byte1
-            1,                        # Byte2 - set to 1 to enable motor control
-            left_rpm & 0xFF,   # Byte3 (low)
-            (left_rpm >> 8) & 0xFF,  # Byte4 (high)
-            right_rpm & 0xFF,  # Byte5
-            (right_rpm >> 8) & 0xFF, # Byte6
-            self.alive_counter & 0xFF # Byte7 (Alive)
+            left_dir,                   # Byte0
+            right_dir,                  # Byte1
+            1,                          # Byte2 - set to 1 to enable motor control
+            left_rpm & 0xFF,            # Byte3 (low)
+            (left_rpm >> 8) & 0xFF,     # Byte4 (high)
+            right_rpm & 0xFF,           # Byte5
+            (right_rpm >> 8) & 0xFF,    # Byte6
+            self.alive_counter & 0xFF   # Byte7 (Alive)
         ]
-
-        # Debug log (optional)
-        # self.get_logger().info(
-        #     f"28A-RPM Mode | DirL={self.dir_left} SpeedL={self.speed_left} | DirR={self.dir_right} SpeedR={self.speed_right} | Gear={self.gear}"
-        # )
 
         # Send
         self.set_cyclic_message(0x28A, data)
 
+    def heartbeat_callback(self, msg):
+        """Update heartbeat - resets watchdog timer"""
+        if self.mode == RovoMode.AUTOMATIC_WATCHDOG:
+            self.watchdog_timer.reset()
+
+    def watchdog_timeout(self):
+        """Called when watchdog timer expires"""
+        self.get_logger().warn("Watchdog timeout! Switching to MANUAL mode.")
+        self.enter_manual_mode()
+    
     def destroy_node(self):
         """Clean shutdown"""
         print("Shutting down...")
@@ -644,34 +476,6 @@ class RovoDriverNode(Node):
         # Shutdown CAN interface if configured
         self.shutdown_can_interface()
         self.shutdown_requested = True
-        
-    def check_controller_connection(self):
-        """
-        Periodically checks if the controller is still connected.
-        Checks both physical device file and topic activity.
-        """
-        # 1. Check physical device
-        device_exists = os.path.exists('/dev/input/js0')
-        
-        # 2. Check topic activity (watchdog)
-        # Only relevant if we have ever received a message
-        topic_active = True
-        if self.joy_received:
-            time_diff = time.time() - self.last_joy_time
-            if time_diff > 2.0:
-                topic_active = False
-
-        if not device_exists or not topic_active:
-            # If we are in XBOX_JOYSTICK mode, we need to switch to safe mode
-            if self.mode == RovoMode.XBOX_JOYSTICK:
-                reason = []
-                if not device_exists:
-                    reason.append("device /dev/input/js0 missing")
-                if not topic_active:
-                    reason.append(f"no joy messages for {time_diff:.1f}s")
-                
-                self.get_logger().warn(f"Controller disconnected ({', '.join(reason)}) - Switching to ROVO_JOYSTICK mode!")
-                self.enter_rovo_joystick_mode()
                 
 def main(args=None):
     rclpy.init(args=args)

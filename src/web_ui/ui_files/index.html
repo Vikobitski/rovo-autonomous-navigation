@@ -109,6 +109,62 @@
       /* CSS-Trick, um den Drehpunkt in die Mitte zu legen */
       transform-origin: center center;
     }
+
+    /* Toggle Switch Styles */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+      vertical-align: middle;
+      margin-left: 10px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      -webkit-transition: .4s;
+      transition: .4s;
+      border-radius: 34px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 26px;
+      width: 26px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      -webkit-transition: .4s;
+      transition: .4s;
+      border-radius: 50%;
+    }
+
+    input:checked+.slider {
+      background-color: #2196F3;
+    }
+
+    input:focus+.slider {
+      box-shadow: 0 0 1px #2196F3;
+    }
+
+    input:checked+.slider:before {
+      -webkit-transform: translateX(26px);
+      -ms-transform: translateX(26px);
+      transform: translateX(26px);
+    }
   </style>
 </head>
 
@@ -191,6 +247,18 @@
     <button onclick="sendCommand('START')">Start</button>
     <button onclick="sendCommand('STOP')">Stopp</button>
     <button onclick="zoomToRobot()">Zoom auf Roboter</button>
+
+    <hr>
+
+    <div style="display: flex; align-items: center; margin-top: 10px;">
+      <div>
+        <strong>Mode:</strong> <span id="current-mode">MANUAL</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="mode-toggle" onchange="toggleMode()">
+        <span class="slider"></span>
+      </label>
+    </div>
   </div>
 
   <script type="text/javascript">
@@ -407,6 +475,88 @@
       });
       console.log('Sende Befehl: ' + msg.data);
       cmdTopic.publish(msg);
+    }
+
+    // === 7. Mode Control & Heartbeat ===
+    var setModeTopic = new ROSLIB.Topic({
+      ros: ros,
+      name: '/rovo/set_mode',
+      messageType: 'std_msgs/Int32'
+    });
+
+    var modeTopic = new ROSLIB.Topic({
+      ros: ros,
+      name: '/rovo/mode',
+      messageType: 'std_msgs/Int32'
+    });
+
+    var heartbeatTopic = new ROSLIB.Topic({
+      ros: ros,
+      name: '/rovo/heartbeat',
+      messageType: 'std_msgs/Bool'
+    });
+
+    var heartbeatInterval = null;
+    var isWatchdogActive = false;
+
+    // Mode Subscriber
+    modeTopic.subscribe(function (msg) {
+      var modeText = "UNKNOWN";
+
+      // 0: Manual, 1: Auto, 2: Auto Watchdog
+      if (msg.data === 0) {
+        modeText = "MANUAL";
+        document.getElementById('mode-toggle').checked = false;
+        stopHeartbeat();
+      } else if (msg.data === 1) {
+        modeText = "AUTOMATIC";
+        // Ensure toggle is off if just pure auto (should usually use 2 via UI)
+        // document.getElementById('mode-toggle').checked = true; 
+      } else if (msg.data === 2) {
+        modeText = "WATCHDOG";
+        document.getElementById('mode-toggle').checked = true;
+        startHeartbeat();
+      }
+
+      document.getElementById('current-mode').innerText = modeText;
+    });
+
+    function toggleMode() {
+      var isChecked = document.getElementById('mode-toggle').checked;
+      var newMode = isChecked ? 2 : 0; // 2 = Auto Watchdog, 0 = Manual
+
+      var msg = new ROSLIB.Message({
+        data: newMode
+      });
+      setModeTopic.publish(msg);
+      console.log("Set mode to: " + newMode);
+
+      if (isChecked) {
+        startHeartbeat();
+      } else {
+        stopHeartbeat();
+      }
+    }
+
+    function startHeartbeat() {
+      if (!isWatchdogActive) {
+        isWatchdogActive = true;
+        console.log("Starting Heartbeat...");
+        heartbeatInterval = setInterval(function () {
+          var hbMsg = new ROSLIB.Message({
+            data: true
+          });
+          heartbeatTopic.publish(hbMsg);
+        }, 500); // 2Hz heartbeat (timeout is 1s)
+      }
+    }
+
+    function stopHeartbeat() {
+      if (isWatchdogActive) {
+        isWatchdogActive = false;
+        console.log("Stopping Heartbeat...");
+        clearInterval(heartbeatInterval);
+      }
     }
 
     function zoomToRobot() {

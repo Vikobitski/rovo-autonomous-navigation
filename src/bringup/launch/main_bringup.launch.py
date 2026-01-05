@@ -24,6 +24,13 @@ def generate_launch_description():
         name='bno085_node'
     )
 
+    rovo_driver_node = Node(
+        package='rovo_driver',
+        executable='rovo_driver_node',
+        name='rovo_driver_node',
+        output='screen'
+    )
+
     web_ui_node = Node(
         package='web_ui',
         executable='web_server_node',
@@ -70,6 +77,7 @@ def generate_launch_description():
         rosbridge_launch,
         ublox_gps_launch,
         bno085_node,
+        rovo_driver_node,
         web_ui_node,
         csv_logger_node,
     ])
