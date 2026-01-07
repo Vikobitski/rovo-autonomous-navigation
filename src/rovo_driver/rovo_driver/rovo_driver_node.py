@@ -276,12 +276,13 @@ class RovoDriverNode(Node):
                 raise Exception("Step 6.2 failed")
             
             # Send Success Diagnostic
-            self.publish_diagnostic(DiagnosticStatus.OK, "External control activated successfully")
+            self.get_logger().info("External control activated")
+            #self.publish_diagnostic(DiagnosticStatus.OK, "External control activated successfully")
             return True
             
         except Exception as e:
             self.get_logger().error(f"External control activation failed: {e}")
-            self.publish_diagnostic(DiagnosticStatus.ERROR, f"External control activation failed: {e}")
+            #self.publish_diagnostic(DiagnosticStatus.ERROR, f"External control activation failed: {e}")
             return False
 
     def publish_diagnostic(self, level, message):
@@ -360,7 +361,6 @@ class RovoDriverNode(Node):
 
     def enter_automatic_mode(self):
         """Switch to automatic mode"""
-        self.get_logger().info("→ AUTOMATIC MODE activated")
         
         # Ensure watchdog is off
         self.watchdog_timer.cancel()
@@ -378,10 +378,11 @@ class RovoDriverNode(Node):
         self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
         self.send_can_message(0x28A, [0] * 8)
 
+        self.get_logger().info("→ AUTOMATIC MODE activated")
+
     def enter_automatic_watchdog_mode(self):
         """Switch to automatic mode with watchdog"""
-        self.get_logger().info("→ AUTOMATIC WATCHDOG MODE activated")
-        
+               
         if not self.activate_external_control():
             self.get_logger().error("Failed to activate external control")
             return
@@ -396,13 +397,15 @@ class RovoDriverNode(Node):
         self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
         self.send_can_message(0x28A, [0] * 8)
 
+        self.get_logger().info("→ AUTOMATIC WATCHDOG MODE activated")
+
     def enter_manual_mode(self):     
         """Switch to manual mode"""
         self.watchdog_timer.cancel() # Stop watchdog if running
         self.set_cyclic_message(0x28A, [0] * 8) # reset speed outputs
         self.set_cyclic_message(0x18A, [0x00, 0x00, 0x00])  # Deactivate external control
         self.get_logger().info("Deactivated external control")
-        self.publish_diagnostic(DiagnosticStatus.OK, "External control deactivated")
+        #self.publish_diagnostic(DiagnosticStatus.OK, "External control deactivated")
         self.mode = RovoMode.MANUAL
         
         mode_msg = Int32()
