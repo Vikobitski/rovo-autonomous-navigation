@@ -336,15 +336,15 @@ class RovoDriverNode(Node):
         requested_mode = msg.data
         
         if requested_mode == 0: # Manual request
-            if self.mode != RovoMode.MANUAL:
+            #if self.mode != RovoMode.MANUAL:
                 self.enter_manual_mode()
                 
         elif requested_mode == 1: # Automatic request
-            if self.mode != RovoMode.AUTOMATIC:
+            #if self.mode != RovoMode.AUTOMATIC:
                 self.enter_automatic_mode()
 
         elif requested_mode == 2: # Automatic Watchdog request
-            if self.mode != RovoMode.AUTOMATIC_WATCHDOG:
+            #if self.mode != RovoMode.AUTOMATIC_WATCHDOG:
                 self.enter_automatic_watchdog_mode()
 
         else:
