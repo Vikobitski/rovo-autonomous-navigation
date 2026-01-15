@@ -112,8 +112,9 @@ class RovoDriverNode(Node):
         
         # Start initialization
         self.get_logger().info("ROVO driver started - ready for commands")
-        self.get_logger().info("  Send 1 to /rovo/set_mode for AUTOMATIC mode") 
         self.get_logger().info("  Send 0 to /rovo/set_mode for MANUAL mode")
+        self.get_logger().info("  Send 1 to /rovo/set_mode for AUTOMATIC mode") 
+        self.get_logger().info("  Send 2 to /rovo/set_mode for AUTOMATIC WATCHDOG mode") 
 
         # Start CAN Notifier with a listener for speed updates
         # This will call self.speed_monitor whenever a message arrives
