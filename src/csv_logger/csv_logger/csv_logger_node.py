@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, Imu
+from std_msgs.msg import Int8
 import math
 import csv
 import os
@@ -55,6 +56,12 @@ class CSVLoggerNode(Node):
                 Imu, '/imu/data', self._imu_callback, 10
             )
             self.latest_imu_msg = None
+            
+            # Subscribe to Calibration Status
+            self.calib_sub = self.create_subscription(
+                Int8, '/imu/calibration_status', self._calib_callback, 10
+            )
+            self.latest_calib_msg = None
         
         self.get_logger().info('CSV Logger started')
         if self.log_gps:
@@ -68,6 +75,7 @@ class CSVLoggerNode(Node):
                 'timestamp', 'seconds', 'latitude', 'longitude', 
                 'altitude', 'position_covariance_type', 'RTK-status',
                 'BNO085-absolute-heading','BNO085-quaternion' , 'BNO085-angular-velocity', 'BNO085-linear-acceleration',
+                'BNO085-calibration-status',
             ])
 
         # header counts as one line
@@ -170,6 +178,7 @@ class CSVLoggerNode(Node):
             bno_quat = ""
             bno_ang_vel = ""
             bno_lin_acc = ""
+            bno_calib = ""
             
             if self.latest_imu_msg:
                 # Calculate heading (Yaw)
@@ -184,6 +193,9 @@ class CSVLoggerNode(Node):
                 la = self.latest_imu_msg.linear_acceleration
                 bno_lin_acc = f"[{la.x:.4f}, {la.y:.4f}, {la.z:.4f}]"
 
+            if self.latest_calib_msg:
+                bno_calib = str(self.latest_calib_msg.data)
+
             with open(self.gps_csv_path, 'a', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow([
@@ -197,7 +209,8 @@ class CSVLoggerNode(Node):
                     bno_heading,
                     bno_quat,
                     bno_ang_vel,
-                    bno_lin_acc
+                    bno_lin_acc,
+                    bno_calib
                 ])
             # increment line counter
             self.current_lines += 1
@@ -208,17 +221,29 @@ class CSVLoggerNode(Node):
         """Store the latest IMU message"""
         self.latest_imu_msg = msg
 
+    def _calib_callback(self, msg: Int8):
+        """Store the latest calibration status"""
+        self.latest_calib_msg = msg
+
     def _get_yaw_from_quaternion(self, q):
         """
-        Convert quaternion (x, y, z, w) to yaw (heading) in degrees (0-360) or radians.
-        Here we return degrees as that is often more readable for logging.
+        Convert quaternion (x, y, z, w) to heading in degrees (0-360).
         """
         # standard conversion from quaternion to euler roll, pitch, yaw
         t0 = +2.0 * (q.w * q.z + q.x * q.y)
         t1 = +1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        yaw_z = math.atan2(t0, t1)
+        yaw_rad = math.atan2(t0, t1)
         
-        return math.degrees(yaw_z)
+        yaw_deg = math.degrees(yaw_rad)
+        
+        # Calculate display heading based on JS logic
+        # let displayHeading = (90 - yawDeg);
+        display_heading = 90.0 - yaw_deg
+        
+        # displayHeading = (displayHeading + 360) % 360;
+        display_heading = (display_heading + 360.0) % 360.0
+        
+        return display_heading
 
 def main(args=None):
     rclpy.init(args=args)
