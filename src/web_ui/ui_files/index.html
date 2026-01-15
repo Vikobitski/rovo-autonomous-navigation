@@ -332,24 +332,23 @@
     });
 
     // === 4. BNO085 Kalibrierungs-Status ===
-    var diagTopic = new ROSLIB.Topic({
+    var calibTopic = new ROSLIB.Topic({
       ros: ros,
-      name: '/diagnostics',
-      messageType: 'diagnostic_msgs/DiagnosticArray'
+      name: '/imu/calibration_status',
+      messageType: 'std_msgs/Int8'
     });
-    diagTopic.subscribe(function (message) {
-      var bnoStatusMsg = message.status.find(s => s.name.includes('Calibration Status'));
-      if (bnoStatusMsg) {
-        var calibValue = bnoStatusMsg.values.find(v => v.key === 'System Calibration').value;
-        var statusText = 'Unknown';
-        switch (calibValue) {
-          case '0': statusText = '<span style="color: red;">Unreliable (0)</span>'; break;
-          case '1': statusText = '<span style="color: orange;">Low Acc (1)</span>'; break;
-          case '2': statusText = '<span style="color: blue;">Medium Acc (2)</span>'; break;
-          case '3': statusText = '<span style="color: green;">Full Acc (3)</span>'; break;
-        }
-        document.getElementById('BNO085-status').innerHTML = statusText;
+    calibTopic.subscribe(function (message) {
+      var calibValue = message.data;
+      var statusText = 'Unknown';
+      // message.data ist bei std_msgs/Int8 ein Number
+      switch (calibValue) {
+        case 0: statusText = '<span style="color: red;">Unreliable (0)</span>'; break;
+        case 1: statusText = '<span style="color: orange;">Low Acc (1)</span>'; break;
+        case 2: statusText = '<span style="color: blue;">Medium Acc (2)</span>'; break;
+        case 3: statusText = '<span style="color: green;">Full Acc (3)</span>'; break;
+        default: statusText = 'Unknown (' + calibValue + ')';
       }
+      document.getElementById('BNO085-status').innerHTML = statusText;
     });
 
     // === 5. RTK Fix Mode Status (mit ublox_msgs) ===

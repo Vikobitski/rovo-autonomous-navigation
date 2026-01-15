@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
-from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
+from std_msgs.msg import Int8
 
 import board
 import busio
@@ -19,7 +19,7 @@ class Bno085Node(Node):
     Liest die fusionierte Quaternion (Rotation Vector), Beschleunigung
     und Gyroskop-Daten und veröffentlicht sie als sensor_msgs/Imu.
     
-    Veröffentlicht außerdem den Kalibrierungsstatus auf /diagnostics.
+    Veröffentlicht außerdem den Kalibrierungsstatus auf /imu/calibration_status.
     """
     def __init__(self):
         super().__init__('bno085_node')
@@ -48,7 +48,7 @@ class Bno085Node(Node):
 
         # --- ROS Publisher & Timer ---
         self.imu_publisher = self.create_publisher(Imu, '/imu/data', 10)
-        self.diag_publisher = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
+        self.calib_publisher = self.create_publisher(Int8, '/imu/calibration_status', 10)
         
         timer_period = 0.02  # 50Hz
         self.timer = self.create_timer(timer_period, self.timer_callback)
@@ -104,28 +104,11 @@ class Bno085Node(Node):
             # --- 2. Kalibrierungsstatus lesen und veröffentlichen ---
             
             # .calibration_status gibt einen einzelnen Integer (0-3) zurück.
-            sys_cal = self.bno.calibration_status 
-            
-            diag_array = DiagnosticArray()
-            diag_array.header.stamp = current_time
+            cal_status = self.bno.calibration_status 
 
-            status_msg = DiagnosticStatus()
-            status_msg.name = f"{self.get_name()}: Calibration Status" 
-            status_msg.hardware_id = self.frame_id
-
-            # Level 0-2 sind WARN, Level 3 ist OK
-            if sys_cal < 3:
-                status_msg.level = DiagnosticStatus.WARN 
-                status_msg.message = f"IMU is not fully calibrated (System Status: {sys_cal})"
-            else:
-                status_msg.level = DiagnosticStatus.OK
-                status_msg.message = f"IMU is fully calibrated (System Status: {sys_cal})"
-
-            # Füge nur den System-Kalibrierungswert hinzu
-            status_msg.values.append(KeyValue(key="System Calibration", value=str(sys_cal)))
-
-            diag_array.status.append(status_msg)
-            self.diag_publisher.publish(diag_array)
+            calib_msg = Int8()
+            calib_msg.data = cal_status
+            self.calib_publisher.publish(calib_msg)
 
 
         except Exception as e:
