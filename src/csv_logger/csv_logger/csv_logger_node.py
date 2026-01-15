@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import NavSatFix
+from sensor_msgs.msg import NavSatFix, Imu
+import math
 import csv
 import os
 from datetime import datetime
@@ -49,6 +50,11 @@ class CSVLoggerNode(Node):
             self.gps_sub = self.create_subscription(
                 NavSatFix, self.gps_topic, self._gps_callback, qos_profile
             )
+            # Subscribe to IMU data
+            self.imu_sub = self.create_subscription(
+                Imu, '/imu/data', self._imu_callback, 10
+            )
+            self.latest_imu_msg = None
         
         self.get_logger().info('CSV Logger started')
         if self.log_gps:
@@ -60,8 +66,10 @@ class CSVLoggerNode(Node):
             writer = csv.writer(f)
             writer.writerow([
                 'timestamp', 'seconds', 'latitude', 'longitude', 
-                'altitude', 'position_covariance_type', 'status'
+                'altitude', 'position_covariance_type', 'RTK-status',
+                'BNO085-absolute-heading','BNO085-quaternion' , 'BNO085-angular-velocity', 'BNO085-linear-acceleration',
             ])
+
         # header counts as one line
         self.current_lines = 1
 
@@ -157,6 +165,25 @@ class CSVLoggerNode(Node):
             timestamp = datetime.now().isoformat()
             seconds = self.get_clock().now().nanoseconds / 1e9
             
+            # Prepare BNO085 data
+            bno_heading = ""
+            bno_quat = ""
+            bno_ang_vel = ""
+            bno_lin_acc = ""
+            
+            if self.latest_imu_msg:
+                # Calculate heading (Yaw)
+                q = self.latest_imu_msg.orientation
+                yaw = self._get_yaw_from_quaternion(q)
+                bno_heading = f"{yaw:.4f}"
+                bno_quat = f"[{q.x:.4f}, {q.y:.4f}, {q.z:.4f}, {q.w:.4f}]"
+                
+                av = self.latest_imu_msg.angular_velocity
+                bno_ang_vel = f"[{av.x:.4f}, {av.y:.4f}, {av.z:.4f}]"
+                
+                la = self.latest_imu_msg.linear_acceleration
+                bno_lin_acc = f"[{la.x:.4f}, {la.y:.4f}, {la.z:.4f}]"
+
             with open(self.gps_csv_path, 'a', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow([
@@ -166,13 +193,32 @@ class CSVLoggerNode(Node):
                     f'{msg.longitude:.8f}',
                     f'{msg.altitude:.3f}',
                     msg.position_covariance_type,
-                    msg.status.status
+                    msg.status.status,
+                    bno_heading,
+                    bno_quat,
+                    bno_ang_vel,
+                    bno_lin_acc
                 ])
             # increment line counter
             self.current_lines += 1
         except Exception as e:
             self.get_logger().error(f'Error writing GPS data: {e}')
 
+    def _imu_callback(self, msg: Imu):
+        """Store the latest IMU message"""
+        self.latest_imu_msg = msg
+
+    def _get_yaw_from_quaternion(self, q):
+        """
+        Convert quaternion (x, y, z, w) to yaw (heading) in degrees (0-360) or radians.
+        Here we return degrees as that is often more readable for logging.
+        """
+        # standard conversion from quaternion to euler roll, pitch, yaw
+        t0 = +2.0 * (q.w * q.z + q.x * q.y)
+        t1 = +1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        yaw_z = math.atan2(t0, t1)
+        
+        return math.degrees(yaw_z)
 
 def main(args=None):
     rclpy.init(args=args)
