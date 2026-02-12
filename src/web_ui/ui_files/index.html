@@ -191,6 +191,8 @@
     <button onclick="sendCommand('START')">Start</button>
     <button onclick="sendCommand('STOP')">Stopp</button>
     <button onclick="zoomToRobot()">Zoom auf Roboter</button>
+    <br>
+    <button onclick="togglePath()" style="margin-top: 5px;">Pfad Visu an/aus</button>
 
     <hr>
 
@@ -270,6 +272,8 @@
     // Greife auf das Bild-Element zu, das wir rotieren wollen
     var robotIconImg = robotMarker._icon.querySelector('.robot-icon');
     var currentHeading = 0;
+    var currentLat = 0;
+    var currentLon = 0;
 
     // === 3. ROS-Topics abonnieren ===
 
@@ -310,11 +314,11 @@
       messageType: 'sensor_msgs/NavSatFix'
     });
     gpsTopic.subscribe(function (message) {
-      var lat = message.latitude;
-      var lon = message.longitude;
-      robotMarker.setLatLng([lat, lon]);
-      document.getElementById('ZED-F9P-lat').innerHTML = lat.toFixed(8);
-      document.getElementById('ZED-F9P-lon').innerHTML = lon.toFixed(8);
+      currentLat = message.latitude;
+      currentLon = message.longitude;
+      robotMarker.setLatLng([currentLat, currentLon]);
+      document.getElementById('ZED-F9P-lat').innerHTML = currentLat.toFixed(8);
+      document.getElementById('ZED-F9P-lon').innerHTML = currentLon.toFixed(8);
 
       // Status Text Mapping
       var statusText = "Unknown";
@@ -552,6 +556,95 @@
         });
       }
     }
+
+    // === 9. Live Path Visualization ===
+    var pathHistory = []; // Stores {lat, lon, heading}
+    var MAX_PATH_POINTS = 900; // 15 minutes at 1Hz
+    var pathPolyline = L.polyline([], { color: 'red', weight: 3 }).addTo(map);
+    var pathMarkersLayer = L.layerGroup().addTo(map);
+    var isPathVisible = true;
+
+    function togglePath() {
+      isPathVisible = !isPathVisible;
+      if (isPathVisible) {
+        pathPolyline.addTo(map);
+        pathMarkersLayer.addTo(map);
+        updatePathVisualization(); // Refresh immediately
+        console.log("Path visualization enabled");
+      } else {
+        pathPolyline.remove();
+        pathMarkersLayer.remove();
+        console.log("Path visualization disabled");
+      }
+    }
+
+    function recordPathPoint() {
+      // Only record if we have valid coordinates (basic check for 0,0 which might be init state)
+      if (currentLat === 0 && currentLon === 0) return;
+
+      var point = {
+        lat: currentLat,
+        lon: currentLon,
+        heading: currentHeading
+      };
+
+      pathHistory.push(point);
+
+      if (pathHistory.length > MAX_PATH_POINTS) {
+        pathHistory.shift(); // Remove oldest
+      }
+
+      if (isPathVisible) {
+        updatePathVisualization();
+      }
+    }
+
+    function updatePathVisualization() {
+      // Basic check if visible, although mostly controlled by recordPathPoint now
+      if (!isPathVisible) return;
+
+      // Update Polyline
+      var latLngs = pathHistory.map(p => [p.lat, p.lon]);
+      pathPolyline.setLatLngs(latLngs);
+
+      // Update Markers (Heading Arrows)
+      pathMarkersLayer.clearLayers();
+
+      // Draw an arrow every 20 points (approx every 20 seconds)
+      // to avoid cluttering the map.
+      for (var i = 0; i < pathHistory.length; i += 20) {
+        var p = pathHistory[i];
+        addHeadingMarker(p.lat, p.lon, p.heading);
+      }
+    }
+
+    function addHeadingMarker(lat, lon, heading) {
+      // SVG Arrow icon rotated by css transform
+      var arrowIcon = L.divIcon({
+        className: 'arrow-icon',
+        html: `
+          <div style="
+            transform: rotate(${heading}deg);
+            width: 20px; 
+            height: 20px; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center;">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" 
+                style="width: 100%; height: 100%; opacity: 0.8;">
+                <polygon points="50,0 100,100 50,70 0,100" fill="red" stroke="none"/>
+            </svg>
+          </div>
+        `,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+
+      L.marker([lat, lon], { icon: arrowIcon }).addTo(pathMarkersLayer);
+    }
+
+    // Start recording loop (1Hz)
+    setInterval(recordPathPoint, 1000);
 
   </script>
 </body>
