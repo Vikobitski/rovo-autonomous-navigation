@@ -92,3 +92,11 @@ Run specific node:
 ```bash
 ros2 run rovo_hardware imu_node
 ```
+
+## Robot Localization
+
+### Debugging: Datum-Koordinaten anzeigen
+Falls du die Datum-Koordinaten der `navsat_transform_node` sehen möchtest (standardmäßig auf WARN-Level, um Log-Spam zu vermeiden):
+```bash
+ros2 run robot_localization navsat_transform_node --ros-args --log-level INFO
+```

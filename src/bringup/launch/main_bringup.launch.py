@@ -59,6 +59,15 @@ def generate_launch_description():
         )
     )
 
+    # Get bringup package share directory for localization launch
+    bringup_pkg_share = get_package_share_directory('bringup')
+    
+    localization_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(bringup_pkg_share, 'launch', 'localization_launch.py')
+        )
+    )
+
     # CSV logger node (logs GPS / Pose to CSV files)
     csv_logger_node = Node(
         package='csv_logger',
@@ -76,6 +85,7 @@ def generate_launch_description():
         ntrip_client_launch,
         rosbridge_launch,
         ublox_gps_launch,
+        localization_launch,
         bno085_node,
         rovo_driver_node,
         web_ui_node,
