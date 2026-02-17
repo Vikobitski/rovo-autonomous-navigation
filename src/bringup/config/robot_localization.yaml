@@ -18,12 +18,13 @@ ekf_filter_node:
                    false, false, false,
                    false, false, false]
 
-    imu0: /imu/data # <-- Falls dein BNO085 ein anderes Topic hat, hier anpassen
-    imu0_config: [false, false, false,
-                  false, false, true,
-                  false, false, false,
-                  false, false, false,
-                  false, false, false]
+    imu0: /imu/data 
+    # Config Matrix: [x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az]
+    imu0_config: [false, false, false,  # Position (do not use from IMU)
+                  false, false, true,   # Orientation (only use Yaw / Compass direction!)
+                  false, false, false,  # Velocity (do not use)
+                  false, false, false,  # Angular Velocity (do not use)
+                  false, false, false]  # Acceleration (do not use)
 
 navsat_transform_node:
   ros__parameters:

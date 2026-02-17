@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, Imu
+from nav_msgs.msg import Odometry
 from std_msgs.msg import Int8
 import math
 import csv
@@ -62,6 +63,12 @@ class CSVLoggerNode(Node):
                 Int8, '/imu/calibration_status', self._calib_callback, 10
             )
             self.latest_calib_msg = None
+
+            # Subscribe to Global Odometry
+            self.odom_sub = self.create_subscription(
+                Odometry, '/odometry/global', self._odom_callback, 10
+            )
+            self.latest_odom_msg = None
         
         self.get_logger().info('CSV Logger started')
         if self.log_gps:
@@ -76,6 +83,7 @@ class CSVLoggerNode(Node):
                 'altitude', 'position_covariance_type', 'RTK-status',
                 'BNO085-absolute-heading','BNO085-quaternion' , 'BNO085-angular-velocity', 'BNO085-linear-acceleration',
                 'BNO085-calibration-status',
+                'odom_x', 'odom_y', 'odom_heading', 'odom_quat_w', 'odom_quat_x', 'odom_quat_y', 'odom_quat_z'
             ])
 
         # header counts as one line
@@ -196,6 +204,31 @@ class CSVLoggerNode(Node):
             if self.latest_calib_msg:
                 bno_calib = str(self.latest_calib_msg.data)
 
+            # Prepare Odometry data
+            odom_x = ""
+            odom_y = ""
+            odom_heading = ""
+            odom_qw = ""
+            odom_qx = ""
+            odom_qy = ""
+            odom_qz = ""
+
+            if self.latest_odom_msg:
+                pos = self.latest_odom_msg.pose.pose.position
+                odom_x = f"{pos.x:.4f}"
+                odom_y = f"{pos.y:.4f}"
+                
+                ori = self.latest_odom_msg.pose.pose.orientation
+                odom_qw = f"{ori.w:.4f}"
+                odom_qx = f"{ori.x:.4f}"
+                odom_qy = f"{ori.y:.4f}"
+                odom_qz = f"{ori.z:.4f}"
+                
+                # reusing _get_yaw_from_quaternion for heading in degrees
+                heading_deg = self._get_yaw_from_quaternion(ori)
+                odom_heading = f"{heading_deg:.4f}"
+
+
             with open(self.gps_csv_path, 'a', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow([
@@ -210,7 +243,14 @@ class CSVLoggerNode(Node):
                     bno_quat,
                     bno_ang_vel,
                     bno_lin_acc,
-                    bno_calib
+                    bno_calib,
+                    odom_x,
+                    odom_y,
+                    odom_heading,
+                    odom_qw,
+                    odom_qx,
+                    odom_qy,
+                    odom_qz
                 ])
             # increment line counter
             self.current_lines += 1
@@ -224,6 +264,10 @@ class CSVLoggerNode(Node):
     def _calib_callback(self, msg: Int8):
         """Store the latest calibration status"""
         self.latest_calib_msg = msg
+
+    def _odom_callback(self, msg: Odometry):
+        """Store the latest odometry message"""
+        self.latest_odom_msg = msg
 
     def _get_yaw_from_quaternion(self, q):
         """
