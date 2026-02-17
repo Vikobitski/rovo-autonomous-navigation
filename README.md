@@ -1,6 +1,3 @@
-# Rovo Workspace
-Information collected from `README.txt` and formatted as Markdown.
-
 ## Sourcing
 ```bash
 source ~/rovo_ws/install/setup.bash
