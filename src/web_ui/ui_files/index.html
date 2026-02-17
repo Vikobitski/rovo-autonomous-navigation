@@ -166,8 +166,10 @@
     <button onclick="zoomToRobot()">Zoom auf Roboter</button>
     <br>
     <button onclick="togglePath()" style="margin-top: 5px;">Pfad Visu an/aus</button>
+    <button onclick="resetPath()" style="margin-top: 5px; margin-left: 5px;">Reset Pfad</button>
 
     <hr>
+
 
     <div style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px;">
       <div style="margin-bottom: 5px;">
@@ -578,6 +580,13 @@
         pathMarkersLayer.remove();
         console.log("Path visualization disabled");
       }
+    }
+
+    function resetPath() {
+      pathHistory = [];
+      pathPolyline.setLatLngs([]);
+      pathMarkersLayer.clearLayers();
+      console.log("Path reset");
     }
 
     function recordPathPoint() {

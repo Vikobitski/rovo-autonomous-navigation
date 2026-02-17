@@ -68,6 +68,12 @@ def generate_launch_description():
         )
     )
 
+    nav2_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(bringup_pkg_share, 'launch', 'nav2_launch.py')
+        )
+    )
+
     # CSV logger node (logs GPS / Pose to CSV files)
     csv_logger_node = Node(
         package='csv_logger',
@@ -86,6 +92,7 @@ def generate_launch_description():
         rosbridge_launch,
         ublox_gps_launch,
         localization_launch,
+        nav2_launch,
         bno085_node,
         rovo_driver_node,
         web_ui_node,
