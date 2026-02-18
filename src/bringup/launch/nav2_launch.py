@@ -32,6 +32,39 @@ def generate_launch_description():
         remappings=[('cmd_vel', '/rovo/set_speed')]
     )
 
+    # Planner Server
+    # planner_server = Node(
+    #     package='nav2_planner',
+    #     executable='planner_server',
+    #     name='planner_server',
+    #     output='screen',
+    #     respawn=True,
+    #     respawn_delay=2.0,
+    #     parameters=[configured_params]
+    # )
+
+    # Behavior Server (formerly Recoveries Server)
+    # behavior_server = Node(
+    #     package='nav2_behaviors',
+    #     executable='behavior_server',
+    #     name='behavior_server',
+    #     output='screen',
+    #     respawn=True,
+    #     respawn_delay=2.0,
+    #     parameters=[configured_params]
+    # )
+
+    # BT Navigator
+    # bt_navigator = Node(
+    #     package='nav2_bt_navigator',
+    #     executable='bt_navigator',
+    #     name='bt_navigator',
+    #     output='screen',
+    #     respawn=True,
+    #     respawn_delay=2.0,
+    #     parameters=[configured_params]
+    # )
+
     # Lifecycle Manager
     lifecycle_manager = Node(
         package='nav2_lifecycle_manager',
@@ -41,10 +74,16 @@ def generate_launch_description():
         parameters=[{'use_sim_time': True},
                     {'autostart': True},
                     {'node_names': ['controller_server']}]
+                                    # 'planner_server',
+                                    # 'behavior_server',
+                                    # 'bt_navigator']}]
     )
 
     return LaunchDescription([
         declare_params_file_cmd,
         controller_server,
+        # planner_server,
+        # behavior_server,
+        # bt_navigator,
         lifecycle_manager
     ])

@@ -167,6 +167,11 @@
     <br>
     <button onclick="togglePath()" style="margin-top: 5px;">Pfad Visu an/aus</button>
     <button onclick="resetPath()" style="margin-top: 5px; margin-left: 5px;">Reset Pfad</button>
+    
+    <hr>
+    <h3>Test Trajektorien:</h3>
+    <button onclick="sendTrajectory('FIGURE8')" style="background-color: #e7e7e7; color: black; margin-bottom: 5px;">Figure-8 (5m)</button>
+    <button onclick="sendTrajectory('CIRCLE')" style="background-color: #e7e7e7; color: black;">Circle (3m)</button>
 
     <hr>
 
@@ -249,6 +254,9 @@
     var currentHeading = 0;
     var currentLat = 0;
     var currentLon = 0;
+    // Globale Variablen für Metrische Position (für Trajektorien-Start)
+    var currentOdomX = 0.0;
+    var currentOdomY = 0.0;
 
     // === 3. ROS-Topics abonnieren ===
 
@@ -263,6 +271,9 @@
       // Position update
       var x = message.pose.pose.position.x;
       var y = message.pose.pose.position.y;
+      
+      currentOdomX = x;
+      currentOdomY = y;
 
       document.getElementById('val_odom_x').innerHTML = x.toFixed(2);
       document.getElementById('val_odom_y').innerHTML = y.toFixed(2);
@@ -656,6 +667,125 @@
 
     // Start recording loop (1Hz)
     setInterval(recordPathPoint, 1000);
+
+    // ==========================================================
+    // === 10. Trajectory Testing (Action Client) ===
+    // ==========================================================
+    
+    // Action Client für Nav2 FollowPath
+    var followPathClient = new ROSLIB.ActionClient({
+      ros: ros,
+      serverName: '/controller_server/follow_path',
+      actionName: 'nav2_msgs/action/FollowPath'
+    });
+
+    function sendTrajectory(type) {
+      console.log("Generating trajectory: " + type);
+      
+      var pathMsg = new ROSLIB.Message({
+        header: {
+          frame_id: 'map',
+          stamp: { sec: 0, nanosec: 0 } // Current time usually
+        },
+        poses: []
+      });
+
+      // Parameter
+      var points = 100;
+      var dt = 0.1; // Abstand zwischen Punkten (in Parameter-Zeit t)
+      
+      // Startpunkt ist aktuelle Roboter-Position
+      var startX = currentOdomX;
+      var startY = currentOdomY;
+
+      if (type === 'FIGURE8') {
+        // Lemniscate of Gerono: x = a*sin(t), y = a*sin(t)*cos(t)
+        // Wir verschieben es so, dass (0,0) der Start ist oder der Roboter "in" die 8 fährt.
+        // Einfacher: Roboter ist bei t=0 (0,0).
+        var scale = 5.0; // 5 Meter Breite
+        
+        for (var i = 0; i <= 200; i++) {
+          var t = (i * 2 * Math.PI) / 200; // Ein voller Umlauf 0..2PI
+          
+          // Formel für liegende 8
+          var x_local = scale * Math.sin(t);
+          var y_local = scale * Math.sin(t) * Math.cos(t);
+          
+          // Tangente für Orientierung berechnen (dx/dt, dy/dt)
+          var dx = scale * Math.cos(t);
+          var dy = scale * (Math.cos(t)*Math.cos(t) - Math.sin(t)*Math.sin(t));
+          var yaw = Math.atan2(dy, dx);
+
+          addPoseToPath(pathMsg, startX + x_local, startY + y_local, yaw);
+        }
+
+      } else if (type === 'CIRCLE') {
+        var radius = 3.0; // 3 Meter Radius
+        
+        for (var i = 0; i <= 100; i++) {
+          var t = (i * 2 * Math.PI) / 100; 
+          
+          // Kreis: x = r*cos(t), y = r*sin(t)
+          // Wir wollen bei (0,0) starten -> Verschieben um Radius?
+          // Oder wir starten bei t such dass x=0, y=0?
+          // Starten wir einfach bei t=0 -> (r, 0).
+          // Damit der Roboter nicht springt, müssen wir (r,0) auf (startX, startY) mappen.
+          // x_local = r*cos(t) - r;
+          // y_local = r*sin(t);
+          
+          var x_local = radius * Math.cos(t) - radius;
+          var y_local = radius * Math.sin(t);
+          
+          // Tangente
+          var dx = -radius * Math.sin(t);
+          var dy = radius * Math.cos(t);
+          var yaw = Math.atan2(dy, dx);
+          
+          addPoseToPath(pathMsg, startX + x_local, startY + y_local, yaw);
+        }
+      }
+
+      // Goal senden
+      var goal = new ROSLIB.Goal({
+        actionClient: followPathClient,
+        goalMessage: {
+          path: pathMsg,
+          controller_id: 'FollowPath',
+          goal_checker_id: 'goal_checker'
+        }
+      });
+
+      goal.on('feedback', function(feedback) {
+        console.log('Feedback: Dist to goal: ' + feedback.distance_to_goal);
+      });
+
+      goal.on('result', function(result) {
+        console.log('Final Result: ' + JSON.stringify(result));
+      });
+
+      console.log("Sending goal...");
+      goal.send();
+    }
+
+    function addPoseToPath(pathMsg, x, y, yaw) {
+      // Quaternion from Yaw
+      // qx = 0, qy = 0, qz = sin(yaw/2), qw = cos(yaw/2)
+      var sy = Math.sin(yaw * 0.5);
+      var cy = Math.cos(yaw * 0.5);
+      
+      var pose = {
+        header: {
+            frame_id: 'map',
+            stamp: { sec: 0, nanosec: 0 }
+        },
+        pose: {
+            position: { x: x, y: y, z: 0.0 },
+            orientation: { x: 0.0, y: 0.0, z: sy, w: cy }
+        }
+      };
+      
+      pathMsg.poses.push(pose);
+    }
 
   </script>
 </body>
