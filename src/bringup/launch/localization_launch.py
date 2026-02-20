@@ -27,10 +27,10 @@ def generate_launch_description():
         name='ekf_filter_node',
         output='screen',
         parameters=[config_dir],
-        remappings=[
-            # Wir benennen das Standard-Topic um, damit es eindeutiger ist
-            ('/odometry/filtered', '/odometry/global')
-        ]
+        # remappings=[
+        #     # Wir benennen das Standard-Topic um, damit es eindeutiger ist
+        #     ('/odometry/filtered', '/odometry/global')
+        # ]
     )
 
     # ==========================================

@@ -86,15 +86,23 @@ def generate_launch_description():
         ]
     )
 
+    trajectory_follower_node = Node(
+        package='my_adaptive_controller',
+        executable='trajectory_follower',
+        name='trajectory_follower',
+        output='screen'
+    )
+
     # === 4. Alle Aktionen zusammenfassen ===
     return LaunchDescription([
         ntrip_client_launch,
         rosbridge_launch,
         ublox_gps_launch,
         localization_launch,
-        nav2_launch,
+        #nav2_launch,
         bno085_node,
         rovo_driver_node,
         web_ui_node,
         csv_logger_node,
+        trajectory_follower_node,
     ])

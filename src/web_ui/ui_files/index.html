@@ -168,14 +168,6 @@
     <button onclick="togglePath()" style="margin-top: 5px;">Pfad Visu an/aus</button>
     <button onclick="resetPath()" style="margin-top: 5px; margin-left: 5px;">Reset Pfad</button>
 
-    <hr>
-    <h3>Test Trajektorien:</h3>
-    <button onclick="sendTrajectory('FIGURE8')"
-      style="background-color: #e7e7e7; color: black; margin-bottom: 5px;">Figure-8 (5m)</button>
-    <button onclick="sendTrajectory('CIRCLE')" style="background-color: #e7e7e7; color: black;">Circle (3m)</button>
-
-    <hr>
-
 
     <div style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px;">
       <div style="margin-bottom: 5px;">
@@ -188,6 +180,15 @@
       </div>
       <button onclick="sendSpeed()" style="width: 100%; padding: 5px; cursor: pointer;">Sende Geschwindigkeit</button>
     </div>
+    <hr>
+    <h3>Trajektorie erstellen:</h3>
+    <button id="btn-draw-path" onclick="toggleDrawingMode()" style="margin-bottom: 5px;">Route Zeichnen</button><br>
+    <button onclick="sendPlannedPath()" style="background-color: #e7e7e7; color: black; margin-bottom: 5px;">Pfad
+      Senden</button>
+    <button onclick="clearPlannedPath()" style="background-color: #e7e7e7; color: black;">Pfad Löschen</button>
+
+    <hr>
+
 
     <div style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px;">
       <div>
@@ -264,7 +265,7 @@
     // 3.0 Global Odometry Subscriber (NEU)
     var odomTopic = new ROSLIB.Topic({
       ros: ros,
-      name: '/odometry/global',
+      name: '/odometry/filtered',
       messageType: 'nav_msgs/Odometry'
     });
 
@@ -662,124 +663,123 @@
     setInterval(recordPathPoint, 1000);
 
     // ==========================================================
-    // === 10. Trajectory Testing (Action Client) ===
+    // === 10. Trajectory Builder (Interactive) ===
     // ==========================================================
 
-    // Action Client für Nav2 FollowPath
-    var followPathClient = new ROSLIB.ActionClient({
+    var isDrawingPath = false;
+    var plannedPathPoints = []; // Stores L.LatLng objects
+    var plannedPathPolyline = L.polyline([], { color: 'blue', weight: 4, dashArray: '5, 10' }).addTo(map);
+    var plannedMarkersLayer = L.layerGroup().addTo(map);
+
+    var plannedPathTopic = new ROSLIB.Topic({
       ros: ros,
-      serverName: '/follow_path',
-      actionName: 'nav2_msgs/action/FollowPath_'
+      name: '/set_trajectory',
+      messageType: 'nav_msgs/Path'
     });
 
-    function sendTrajectory(type) {
-      console.log("Generating trajectory: " + type);
+    function toggleDrawingMode() {
+      isDrawingPath = !isDrawingPath;
+      var btn = document.getElementById('btn-draw-path');
+
+      if (isDrawingPath) {
+        btn.style.backgroundColor = '#4CAF50'; // Green
+        btn.style.color = 'white';
+        btn.innerText = 'Zeichnen: AN (Auf Karte klicken)';
+        document.getElementById('map').style.cursor = 'crosshair';
+      } else {
+        btn.style.backgroundColor = '';
+        btn.style.color = '';
+        btn.innerText = 'Route Zeichnen';
+        document.getElementById('map').style.cursor = '';
+      }
+    }
+
+    // Map Click Event for adding waypoints
+    map.on('click', function (e) {
+      if (!isDrawingPath) return;
+
+      var latlng = e.latlng;
+      plannedPathPoints.push(latlng);
+
+      // Update Polyline
+      plannedPathPolyline.setLatLngs(plannedPathPoints);
+
+      // Add Marker
+      var markerIndex = plannedPathPoints.length;
+      var marker = L.circleMarker(latlng, {
+        radius: 6,
+        fillColor: "#3388ff",
+        color: "#000",
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.8
+      }).addTo(plannedMarkersLayer).bindTooltip("WP " + markerIndex, { permanent: false });
+    });
+
+    function clearPlannedPath() {
+      plannedPathPoints = [];
+      plannedPathPolyline.setLatLngs([]);
+      plannedMarkersLayer.clearLayers();
+    }
+
+    function sendPlannedPath() {
+      if (plannedPathPoints.length < 2) {
+        alert("Bitte zeichne mindestens 2 Punkte für einen Pfad.");
+        return;
+      }
+
+      console.log("Sende geplanten Pfad mit " + plannedPathPoints.length + " Punkten.");
 
       var pathMsg = new ROSLIB.Message({
         header: {
           frame_id: 'map',
-          stamp: { sec: 0, nanosec: 0 } // Current time usually
+          stamp: { sec: 0, nanosec: 0 }
         },
         poses: []
       });
 
-      // Parameter
-      var points = 100;
-      var dt = 0.1; // Abstand zwischen Punkten (in Parameter-Zeit t)
+      // Convert Lat/Lon to approximate local map coordinates (simplistic cartesian offset)
+      // Für einen echten Roboter sollte hier idealerweise eine korrekte UTM oder
+      // Lat/Lon zu Map-Frame Transformation stattfinden.
+      // Da der Node Odometry x/y erwartet, simulieren wir hier eine relative Bewegung
+      // zum ersten Punkt ODER wir übergeben direkt GPS-Koordinaten (je nachdem was der Node erwartet).
+      // Angenommen, der Node erwartet relative Metrik (x,y), referenziert auf den aktuellen Roboter.
 
-      // Startpunkt ist aktuelle Roboter-Position
-      var startX = currentOdomX;
-      var startY = currentOdomY;
+      // Option A: Pfad relativ zum aktuellen Roboter aufbauen
+      for (var i = 0; i < plannedPathPoints.length; i++) {
+        var p = plannedPathPoints[i];
 
-      if (type === 'FIGURE8') {
-        // Lemniscate of Gerono: x = a*sin(t), y = a*sin(t)*cos(t)
-        // Wir verschieben es so, dass (0,0) der Start ist oder der Roboter "in" die 8 fährt.
-        // Einfacher: Roboter ist bei t=0 (0,0).
-        var scale = 5.0; // 5 Meter Breite
+        // Näherungsweise Umrechnung von Lat/Lon in Meter (nur für kleine Distanzen!)
+        // 1 Grad Lat = ca. 111.32 km
+        // 1 Grad Lon = ca. 40075 km * cos(lat) / 360
+        var dLat = p.lat - currentLat;
+        var dLon = p.lng - currentLon;
 
-        for (var i = 0; i <= 200; i++) {
-          var t = (i * 2 * Math.PI) / 200; // Ein voller Umlauf 0..2PI
+        var metersPerLat = 111320.0;
+        var metersPerLon = 40075000.0 * Math.cos(currentLat * Math.PI / 180) / 360.0;
 
-          // Formel für liegende 8
-          var x_local = scale * Math.sin(t);
-          var y_local = scale * Math.sin(t) * Math.cos(t);
+        var targetX = currentOdomX + (dLon * metersPerLon); // Lon -> X (East)
+        var targetY = currentOdomY + (dLat * metersPerLat); // Lat -> Y (North)
 
-          // Tangente für Orientierung berechnen (dx/dt, dy/dt)
-          var dx = scale * Math.cos(t);
-          var dy = scale * (Math.cos(t) * Math.cos(t) - Math.sin(t) * Math.sin(t));
-          var yaw = Math.atan2(dy, dx);
+        var pose = {
+          header: {
+            frame_id: 'map',
+            stamp: { sec: 0, nanosec: 0 }
+          },
+          pose: {
+            position: { x: targetX, y: targetY, z: 0.0 },
+            orientation: { x: 0.0, y: 0.0, z: 0.0, w: 1.0 } // Simplified
+          }
+        };
 
-          addPoseToPath(pathMsg, startX + x_local, startY + y_local, yaw);
-        }
-
-      } else if (type === 'CIRCLE') {
-        var radius = 3.0; // 3 Meter Radius
-
-        for (var i = 0; i <= 100; i++) {
-          var t = (i * 2 * Math.PI) / 100;
-
-          // Kreis: x = r*cos(t), y = r*sin(t)
-          // Wir wollen bei (0,0) starten -> Verschieben um Radius?
-          // Oder wir starten bei t such dass x=0, y=0?
-          // Starten wir einfach bei t=0 -> (r, 0).
-          // Damit der Roboter nicht springt, müssen wir (r,0) auf (startX, startY) mappen.
-          // x_local = r*cos(t) - r;
-          // y_local = r*sin(t);
-
-          var x_local = radius * Math.cos(t) - radius;
-          var y_local = radius * Math.sin(t);
-
-          // Tangente
-          var dx = -radius * Math.sin(t);
-          var dy = radius * Math.cos(t);
-          var yaw = Math.atan2(dy, dx);
-
-          addPoseToPath(pathMsg, startX + x_local, startY + y_local, yaw);
-        }
+        pathMsg.poses.push(pose);
       }
 
-      // Goal senden
-      var goal = new ROSLIB.Goal({
-        actionClient: followPathClient,
-        goalMessage: {
-          path: pathMsg,
-          controller_id: 'FollowPath',
-          goal_checker_id: 'goal_checker'
-        }
-      });
+      plannedPathTopic.publish(pathMsg);
 
-      goal.on('feedback', function (feedback) {
-        console.log('Feedback: Dist to goal: ' + feedback.distance_to_goal);
-      });
-
-      goal.on('result', function (result) {
-        console.log('Final Result: ' + JSON.stringify(result));
-      });
-
-      console.log("Sending goal...");
-      goal.send();
+      // Optional: Zeichnen Modus beenden nach senden
+      if (isDrawingPath) toggleDrawingMode();
     }
-
-    function addPoseToPath(pathMsg, x, y, yaw) {
-      // Quaternion from Yaw
-      // qx = 0, qy = 0, qz = sin(yaw/2), qw = cos(yaw/2)
-      var sy = Math.sin(yaw * 0.5);
-      var cy = Math.cos(yaw * 0.5);
-
-      var pose = {
-        header: {
-          frame_id: 'map',
-          stamp: { sec: 0, nanosec: 0 }
-        },
-        pose: {
-          position: { x: x, y: y, z: 0.0 },
-          orientation: { x: 0.0, y: 0.0, z: sy, w: cy }
-        }
-      };
-
-      pathMsg.poses.push(pose);
-    }
-
   </script>
 </body>
 

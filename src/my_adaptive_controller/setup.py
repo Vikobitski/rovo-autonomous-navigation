@@ -21,8 +21,7 @@ data_files=[
     entry_points={
         'console_scripts': [
             # Nickname = Package.FileName:FunctionName
-            'navigator = my_adaptive_controller.navigation_node:main',
-            'mock_robot = my_adaptive_controller.mock_sensor_node:main',
+            'trajectory_follower = my_adaptive_controller.trajectory_follower_node:main',
         ],
     },
 )
