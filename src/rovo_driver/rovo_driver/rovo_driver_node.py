@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int32, Bool
-from geometry_msgs.msg import TwistStamped
+from geometry_msgs.msg import Twist
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
 import can
 import threading
@@ -67,14 +67,14 @@ class RovoDriverNode(Node):
         self.watchdog_timer.cancel() # Start cancelled
         # Publisher for speed data
         self.speed_publisher = self.create_publisher(
-            TwistStamped,
+            Twist,
             '/rovo/speed',
             10
         )
         
         # Subscription for speed setpoint
         self.trajectory_control_subscription = self.create_subscription(
-            TwistStamped,
+            Twist,
             '/rovo/set_speed',
             self.trajectory_control_callback,
             20
@@ -322,11 +322,9 @@ class RovoDriverNode(Node):
                 # Calculate rotational speed in rad/s
                 angular_velocity = (right_velocity - left_velocity) / self.wheelbase
                 
-                speed_msg = TwistStamped()
-                speed_msg.header.stamp = self.get_clock().now().to_msg()
-                speed_msg.header.frame_id = "base_link"
-                speed_msg.twist.linear.x = linear_velocity
-                speed_msg.twist.angular.z = angular_velocity
+                speed_msg = Twist()
+                speed_msg.linear.x = linear_velocity
+                speed_msg.angular.z = angular_velocity
                 self.speed_publisher.publish(speed_msg)
                 
             except Exception as e:
@@ -420,8 +418,8 @@ class RovoDriverNode(Node):
         Sets CAN frame for 0x28A in speed mode (RPM mode) based on Twist message (linear.x, angular.z).
         Calculates left/right wheel speeds and converts to RPM.
         """
-        linear_velocity = msg.twist.linear.x 
-        angular_velocity = msg.twist.angular.z
+        linear_velocity = msg.linear.x
+        angular_velocity = msg.angular.z
 
         left_velocity = linear_velocity + (self.wheelbase * angular_velocity / 2)
         right_velocity = linear_velocity - (self.wheelbase * angular_velocity / 2)
