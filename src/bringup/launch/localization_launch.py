@@ -49,9 +49,6 @@ def generate_launch_description():
             
             # Falls dein BNO085 auf einem anderen Topic sendet, hier anpassen:
             ('/imu', '/imu/data'),               
-            
-            # navsat_transform braucht die aktuelle Schätzung vom EKF
-            ('/odometry/filtered', '/odometry/global') 
         ]
     )
 
