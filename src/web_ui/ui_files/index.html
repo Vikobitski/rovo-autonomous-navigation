@@ -517,29 +517,21 @@
     var speedTopic = new ROSLIB.Topic({
       ros: ros,
       name: '/rovo/set_speed',
-      messageType: 'geometry_msgs/TwistStamped'
+      messageType: 'geometry_msgs/Twist'
     });
 
     function sendSpeed() {
       var linX = parseFloat(document.getElementById('input_linear_x').value) || 0.0;
       var angZ = parseFloat(document.getElementById('input_angular_z').value) || 0.0;
 
-      // TwistStamped Message
-      var twistStampedMsg = new ROSLIB.Message({
-        header: {
-          frame_id: "base_link"
-          // stamp wird oft automatisch gesetzt oder kann hier ignoriert werden, 
-          // roslibjs setzt es nicht automatisch, aber rovo_driver akzeptiert es evtl. auch leer/null
-          // oder wir setzen es explizit, wenn nötig.
-        },
-        twist: {
-          linear: { x: linX, y: 0.0, z: 0.0 },
-          angular: { x: 0.0, y: 0.0, z: angZ }
-        }
+      // Twist Message
+      var twistMsg = new ROSLIB.Message({
+        linear: { x: linX, y: 0.0, z: 0.0 },
+        angular: { x: 0.0, y: 0.0, z: angZ }
       });
 
       console.log("Sende Speed: Lin=" + linX + " Ang=" + angZ);
-      speedTopic.publish(twistStampedMsg);
+      speedTopic.publish(twistMsg);
     }
 
     function startHeartbeat() {
