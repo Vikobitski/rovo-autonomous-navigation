@@ -13,7 +13,7 @@ class TrajectoryFollower(Node):
         params = {
             'Kp': 1.5, 'Ki': 0.0, 'Kd': 0.6, 'I_max': 0.2,
             'v_des': 0.15, 'v_max': 0.22, 'lookahead_dist': 0.25,
-            'dist_thresh': 0.03, 'w_sat': 1.5,
+            'dist_thresh': 0.50, 'w_sat': 0.1, #1.5,
             'accel_lin_max': 0.1, 'accel_ang_max': 1.0
         }
 
