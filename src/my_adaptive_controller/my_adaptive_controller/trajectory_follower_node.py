@@ -10,11 +10,18 @@ class TrajectoryFollower(Node):
         super().__init__('trajectory_follower')
 
         # 1. PID PARAMS (Tune here according to your needs)
+        # params = {
+        #     'Kp': 1.5, 'Ki': 0.0, 'Kd': 0.6, 'I_max': 0.2,
+        #     'v_des': 0.15, 'v_max': 0.3, 'lookahead_dist': 0.10,
+        #     'dist_thresh': 0.03, 'w_sat': 0.1, #1.5,
+        #     'accel_lin_max': 0.1, 'accel_ang_max': 1.0
+        # }
+
         params = {
-            'Kp': 1.5, 'Ki': 0.0, 'Kd': 0.6, 'I_max': 0.2,
-            'v_des': 0.15, 'v_max': 0.22, 'lookahead_dist': 0.25,
-            'dist_thresh': 0.50, 'w_sat': 0.1, #1.5,
-            'accel_lin_max': 0.1, 'accel_ang_max': 1.0
+            'Kp': 0.1, 'Ki': 0.0, 'Kd': 0.0, 'I_max': 0.2,
+            'v_des': 0.15, 'v_max': 0.3, 'lookahead_dist': 0.40,
+            'dist_thresh': 0.50, 'w_sat': 0.15, #1.5,
+            'accel_lin_max': 0.1*10, 'accel_ang_max': 1.0*10
         }
 
         # 2. PATH
@@ -50,11 +57,23 @@ class TrajectoryFollower(Node):
 
     def path_cb(self, msg):
         # Extract points from Path message
-        path_points = []
+        raw_points = []
         for pose_stamped in msg.poses:
             x = pose_stamped.pose.position.x
             y = pose_stamped.pose.position.y
-            path_points.append([x, y])
+            raw_points.append([x, y])
+        
+        path_points = []
+        if len(raw_points) > 1:
+            for i in range(len(raw_points) - 1):
+                p1 = np.array(raw_points[i])
+                p2 = np.array(raw_points[i+1])
+                # Insert 200 points between p1 and p2 (total 202 points per segment, excluding last to avoid duplicates)
+                segment = np.linspace(p1, p2, 202)[:-1]
+                path_points.extend(segment)
+            path_points.append(raw_points[-1])
+        elif len(raw_points) == 1:
+            path_points = raw_points
         
         if len(path_points) > 0:
             self.path = np.array(path_points)
@@ -63,7 +82,7 @@ class TrajectoryFollower(Node):
             # Reset controller state for new path
             self.nav.finished = False 
             self.nav.last_closest_idx = 0
-            self.get_logger().info(f"Received new path with {len(path_points)} points.")
+            self.get_logger().info(f"Received new path with {len(self.path)} interpolated points (from {len(raw_points)} original).")
 
     def control_loop(self):
         if not self.odom_received or not self.path_received:

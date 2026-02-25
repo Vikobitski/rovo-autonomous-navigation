@@ -66,7 +66,7 @@ class CSVLoggerNode(Node):
 
             # Subscribe to Global Odometry
             self.odom_sub = self.create_subscription(
-                Odometry, '/odometry/global', self._odom_callback, 10
+                Odometry, '/odometry/filtered', self._odom_callback, 10
             )
             self.latest_odom_msg = None
         

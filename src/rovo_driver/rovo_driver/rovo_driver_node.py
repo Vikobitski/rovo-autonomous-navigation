@@ -421,8 +421,11 @@ class RovoDriverNode(Node):
         linear_velocity = msg.linear.x
         angular_velocity = msg.angular.z
 
-        left_velocity = linear_velocity + (self.wheelbase * angular_velocity / 2)
-        right_velocity = linear_velocity - (self.wheelbase * angular_velocity / 2)
+        # left_velocity = linear_velocity + (self.wheelbase * angular_velocity / 2)
+        # right_velocity = linear_velocity - (self.wheelbase * angular_velocity / 2)
+
+        right_velocity = linear_velocity + (self.wheelbase * angular_velocity / 2)
+        left_velocity = linear_velocity - (self.wheelbase * angular_velocity / 2)
 
         # Direction
         if left_velocity >= 0:      
