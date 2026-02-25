@@ -36,7 +36,7 @@ navsat_transform_node:
     
     # Magnetic/Angle Settings
     magnetic_declination_radians: 0.053
-    yaw_offset: 1.570796327
+    yaw_offset: 0.0
     zero_altitude: true
     
     # Input Settings

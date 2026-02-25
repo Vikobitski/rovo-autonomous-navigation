@@ -52,9 +52,9 @@ class PIDController:
         target_yaw = np.arctan2(y_target - y_rob, x_target - x_rob)
         error_yaw = np.arctan2(np.sin(target_yaw - theta), np.cos(target_yaw - theta))
 
-        if self.logger:
-            self.logger.info(f"Error Yaw: {error_yaw}") 
-            self.logger.info(f"Target Yaw: {target_yaw}")
+        # if self.logger:
+        #     self.logger.info(f"Error Yaw: {error_yaw}") 
+        #     self.logger.info(f"Target Yaw: {target_yaw}")
         
         if abs(error_yaw) < np.radians(1.5): error_yaw = 0.0 # Deadband
 
