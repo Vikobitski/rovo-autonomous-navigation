@@ -1,3 +1,4 @@
+import math
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Imu
@@ -27,6 +28,9 @@ class Bno085Node(Node):
         # --- Parameter ---
         self.declare_parameter('frame_id', 'imu_link')
         self.frame_id = self.get_parameter('frame_id').value
+        
+        self.declare_parameter('yaw_offset_deg', -90.0)
+        self.yaw_offset_deg = self.get_parameter('yaw_offset_deg').value
         
         # --- Hardware-Initialisierung ---
         try:
@@ -71,14 +75,29 @@ class Bno085Node(Node):
                 self.get_logger().warn("Einige Sensordaten sind 'None'. Überspringe Tick.")
                 return
 
+            # --- Yaw Offset für Konvertierung von Norden=0 auf Osten=0 ---
+            yaw_offset_rad = math.radians(self.yaw_offset_deg)
+            q_off_w = math.cos(yaw_offset_rad / 2.0)
+            q_off_x = 0.0
+            q_off_y = 0.0
+            q_off_z = math.sin(yaw_offset_rad / 2.0)
+
+            qx, qy, qz, qw = quat[0], quat[1], quat[2], quat[3]
+
+            # Quaternionen-Multiplikation für Z-Achsen-Rotation (q_offset * q_orig)
+            new_w = q_off_w * qw - q_off_x * qx - q_off_y * qy - q_off_z * qz
+            new_x = q_off_w * qx + q_off_x * qw + q_off_y * qz - q_off_z * qy
+            new_y = q_off_w * qy - q_off_x * qz + q_off_y * qw + q_off_z * qx
+            new_z = q_off_w * qz + q_off_x * qy - q_off_y * qx + q_off_z * qw
+
             msg = Imu()
             msg.header.stamp = current_time
             msg.header.frame_id = self.frame_id
 
-            msg.orientation.x = quat[0]
-            msg.orientation.y = quat[1]
-            msg.orientation.z = quat[2]
-            msg.orientation.w = quat[3]
+            msg.orientation.x = float(new_x)
+            msg.orientation.y = float(new_y)
+            msg.orientation.z = float(new_z)
+            msg.orientation.w = float(new_w)
 
             msg.angular_velocity.x = gyro[0]
             msg.angular_velocity.y = gyro[1]

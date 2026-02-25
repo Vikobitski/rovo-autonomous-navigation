@@ -289,9 +289,8 @@
       var yawRad = Math.atan2(siny_cosp, cosy_cosp);
       var yawDeg = yawRad * (180 / Math.PI);
 
-      // Normalize to 0-360 like compass
-      let displayHeading = (90 - yawDeg);
-      displayHeading = (displayHeading + 360) % 360;
+      // Normalize to 0-360
+      let displayHeading = (yawDeg + 360) % 360;
 
       document.getElementById('val_odom_heading').innerHTML = displayHeading.toFixed(1);
     });
@@ -311,14 +310,11 @@
       var yawRad = Math.atan2(siny_cosp, cosy_cosp);
       var yawDeg = yawRad * (180 / Math.PI);
 
-      let displayHeading = (90 - yawDeg);
-      displayHeading = (displayHeading + 360) % 360;
-
+      let displayHeading = (yawDeg + 360) % 360;
       currentHeading = displayHeading;
 
-      // Rotiere das <img>-Element (wird nicht mehr von Leaflet überschrieben)
       if (robotIconImg) {
-        robotIconImg.style.transform = `rotate(${currentHeading}deg)`;
+        robotIconImg.style.transform = `rotate(${180 - currentHeading}deg)`;
       }
       document.getElementById('BNO085-absolute-heading').innerHTML = currentHeading.toFixed(1);
       document.getElementById('BNO085-angular-velocity').innerHTML = message.angular_velocity.z.toFixed(1);
@@ -642,7 +638,7 @@
         className: 'arrow-icon',
         html: `
           <div style="
-            transform: rotate(${heading}deg);
+            transform: rotate(${180 - heading}deg);
             width: 20px; 
             height: 20px; 
             display: flex; 
