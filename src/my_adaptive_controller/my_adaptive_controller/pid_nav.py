@@ -1,8 +1,9 @@
 import numpy as np
 
 class PIDController:
-    def __init__(self, params):
+    def __init__(self, params, logger):
         self.p = params # Configuration struct/dict
+        self.logger = logger
         
         # Persistent States (Memory)
         self.prev_error = 0.0
@@ -50,6 +51,10 @@ class PIDController:
         # 3. Heading Error & PID
         target_yaw = np.arctan2(y_target - y_rob, x_target - x_rob)
         error_yaw = np.arctan2(np.sin(target_yaw - theta), np.cos(target_yaw - theta))
+
+        if self.logger:
+            self.logger.info(f"Error Yaw: {error_yaw}") 
+            self.logger.info(f"Target Yaw: {target_yaw}")
         
         if abs(error_yaw) < np.radians(1.5): error_yaw = 0.0 # Deadband
 

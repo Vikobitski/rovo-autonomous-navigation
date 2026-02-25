@@ -29,7 +29,7 @@ class Bno085Node(Node):
         self.declare_parameter('frame_id', 'imu_link')
         self.frame_id = self.get_parameter('frame_id').value
         
-        self.declare_parameter('yaw_offset_deg', -90.0)
+        self.declare_parameter('yaw_offset_deg', 0.0)
         self.yaw_offset_deg = self.get_parameter('yaw_offset_deg').value
         
         # --- Hardware-Initialisierung ---

@@ -28,7 +28,7 @@ class TrajectoryFollower(Node):
         self.path = None
 
         # 3. COMPONENTS
-        self.nav = PIDController(params)
+        self.nav = PIDController(params, self.get_logger())
 
         # 4. STATE VARIABLES
         self.x_est, self.y_est, self.yaw_est = 0.0, 0.0, 0.0

@@ -314,7 +314,7 @@
       currentHeading = displayHeading;
 
       if (robotIconImg) {
-        robotIconImg.style.transform = `rotate(${180 - currentHeading}deg)`;
+        robotIconImg.style.transform = `rotate(${90 - currentHeading}deg)`;
       }
       document.getElementById('BNO085-absolute-heading').innerHTML = currentHeading.toFixed(1);
       document.getElementById('BNO085-angular-velocity').innerHTML = message.angular_velocity.z.toFixed(1);
