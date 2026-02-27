@@ -18,10 +18,10 @@ class TrajectoryFollower(Node):
         # }
 
         params = {
-            'Kp': 0.1, 'Ki': 0.0, 'Kd': 0.0, 'I_max': 0.2,
-            'v_des': 0.15, 'v_max': 0.3, 'lookahead_dist': 0.40,
-            'dist_thresh': 0.50, 'w_sat': 0.15, #1.5,
-            'accel_lin_max': 0.1*10, 'accel_ang_max': 1.0*10
+            'Kp': 0.35, 'Ki': 0.0, 'Kd': 0.0, 'I_max': 0.2,
+            'v_des': 0.15, 'v_max': 0.3, 'lookahead_dist': 0.5,
+            'dist_thresh': 0.25, 'w_sat': 0.5, 
+            'accel_lin_max': 1, 'accel_ang_max': 3.14
         }
 
         # 2. PATH

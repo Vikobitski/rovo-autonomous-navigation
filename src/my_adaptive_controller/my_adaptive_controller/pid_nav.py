@@ -78,7 +78,7 @@ class PIDController:
             w_target = 0.0 # Straight parking
             v_target = np.clip(self.p['v_des'] * (dist_to_end / self.p['lookahead_dist']), 0.05, self.p['v_des'])
         else:
-            if abs(error_yaw) > np.radians(10): # Pivot Turn
+            if abs(error_yaw) > np.radians(10*3): # Pivot Turn
                 v_target = 0.0
                 w_target = np.sign(w_target) * max(abs(w_target), 0.8)
             else: # Cruise
