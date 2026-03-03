@@ -192,7 +192,10 @@
     <button id="btn-draw-path" onclick="toggleDrawingMode()" style="margin-bottom: 5px;">Route Zeichnen</button><br>
     <button onclick="sendPlannedPath()" style="background-color: #e7e7e7; color: black; margin-bottom: 5px;">Pfad
       Senden</button>
-    <button onclick="clearPlannedPath()" style="background-color: #e7e7e7; color: black;">Pfad Löschen</button>
+    <button onclick="clearPlannedPath()" style="background-color: #e7e7e7; color: black; margin-bottom: 5px;">Pfad
+      Löschen</button>
+    <button onclick="sendEmptyPath()" style="background-color: #f44336; color: white; margin-bottom: 5px;">Stop (Leerer
+      Pfad)</button>
 
     <hr>
 
@@ -750,6 +753,18 @@
       plannedPathPoints = [];
       plannedPathPolyline.setLatLngs([]);
       plannedMarkersLayer.clearLayers();
+    }
+
+    function sendEmptyPath() {
+      var emptyPathMsg = new ROSLIB.Message({
+        header: {
+          frame_id: 'map',
+          stamp: { sec: 0, nanosec: 0 }
+        },
+        poses: []
+      });
+      console.log("Sende absichtlich leeren Pfad.");
+      plannedPathTopic.publish(emptyPathMsg);
     }
 
     function sendPlannedPath() {

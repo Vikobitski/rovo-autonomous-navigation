@@ -14,6 +14,16 @@ class PIDController:
         self.last_closest_idx = 0
         self.finished = False
 
+    def reset(self):
+        # Reset internal states for a new path
+        self.prev_error = 0.0
+        self.integral = 0.0
+        self.prev_d_term = 0.0
+        self.last_v = 0.0
+        self.last_w = 0.0
+        self.last_closest_idx = 0
+        self.finished = False
+
     def compute(self, current_pose, path_points, dt):
         if self.finished:
             return 0.0, 0.0
@@ -21,6 +31,13 @@ class PIDController:
         x_rob, y_rob, theta = current_pose
         path_x, path_y = path_points[:, 0], path_points[:, 1]
         n_points = len(path_x)
+
+        if n_points == 0:
+            return 0.0, 0.0
+
+        # Safe-guard against thread race conditions where a new shorter path is loaded
+        if self.last_closest_idx >= n_points:
+            self.last_closest_idx = 0
 
         # 1. Sliding Window Search (Prevents jumping back in closed loops)
         search_start = self.last_closest_idx
@@ -74,15 +91,16 @@ class PIDController:
             self.finished = True
             return 0.0, 0.0
 
-        if has_progressed and target_idx == (n_points - 1):
-            w_target = 0.0 # Straight parking
-            v_target = np.clip(self.p['v_des'] * (dist_to_end / self.p['lookahead_dist']), 0.05, self.p['v_des'])
-        else:
-            if abs(error_yaw) > np.radians(10*3): # Pivot Turn
-                v_target = 0.0
-                w_target = np.sign(w_target) * max(abs(w_target), 0.8)
-            else: # Cruise
-                v_target = self.p['v_des'] * np.cos(error_yaw)
+        # straight parking hat dazu geführt das der rovo nur noch geradeaus fährt
+        # if has_progressed and target_idx == (n_points - 1):
+        #     w_target = 0.0 # Straight parking
+        #     v_target = np.clip(self.p['v_des'] * (dist_to_end / self.p['lookahead_dist']), 0.05, self.p['v_des'])
+        # else:
+        if abs(error_yaw) > np.radians(10*3): # Pivot Turn
+            v_target = 0.0
+            w_target = np.sign(w_target) * max(abs(w_target), 0.8)
+        else: # Cruise
+            v_target = self.p['v_des'] * np.cos(error_yaw)
 
         # 5. Acceleration Limiting (Ramps)
         v_final = self.last_v + np.clip(v_target - self.last_v, -self.p['accel_lin_max']*dt, self.p['accel_lin_max']*dt)

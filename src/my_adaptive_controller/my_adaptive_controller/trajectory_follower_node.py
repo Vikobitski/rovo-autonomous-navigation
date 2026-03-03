@@ -23,7 +23,7 @@ class TrajectoryFollower(Node):
         # }
 
         params = {
-            'Kp': 0.35*2.5, 'Ki': 0.0, 'Kd': 0.0, 'I_max': 0.2,
+            'Kp': 1.5, 'Ki': 0.0, 'Kd': 0.0, 'I_max': 0.2,
             'v_des': 0.28, 'v_max': 0.3, 'lookahead_dist': 0.5,
             'dist_thresh': 0.25, 'w_sat': 1.5, 
             'accel_lin_max': 1, 'accel_ang_max': 3.14
@@ -95,8 +95,8 @@ class TrajectoryFollower(Node):
 
         if len(gps_points) == 0:
             self.nav.finished = True
-            self.path_received = False
-            self.get_logger().info("No path received, deactivating controller.")
+            #self.path_received = False
+            self.get_logger().info("Empty path received, deactivating controller.")
             return
 
         self.get_logger().info(f"Received new GPS path with {len(gps_points)} points. Converting to map frame...")
