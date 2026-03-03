@@ -64,25 +64,41 @@ class TrajectoryFollower(Node):
         self.odom_received = True
 
     def path_cb(self, msg):
+        # # Extract points from Path message
+        # raw_points = []
+        # for pose_stamped in msg.poses:
+        #     x = pose_stamped.pose.position.x
+        #     y = pose_stamped.pose.position.y
+        #     raw_points.append([x, y])
+        
+        # path_points = []
+        # if len(raw_points) > 1:
+        #     for i in range(len(raw_points) - 1):
+        #         p1 = np.array(raw_points[i])
+        #         p2 = np.array(raw_points[i+1])
+        #         # Insert 200 points between p1 and p2 (total 202 points per segment, excluding last to avoid duplicates)
+        #         segment = np.linspace(p1, p2, 202)[:-1]
+        #         path_points.extend(segment)
+        #     path_points.append(raw_points[-1])
+        # elif len(raw_points) == 1:
+        #     path_points = raw_points
+        
+        # if len(path_points) > 0:
+        #     self.path = np.array(path_points)
+        #     self.path_received = True
+            
+        #     # Reset controller state for new path
+        #     self.nav.finished = False 
+        #     self.nav.last_closest_idx = 0
+        #     self.get_logger().info(f"Received new path with {len(self.path)} interpolated points (from {len(raw_points)} original).")
+        
         # Extract points from Path message
-        raw_points = []
+        path_points = []
         for pose_stamped in msg.poses:
             x = pose_stamped.pose.position.x
             y = pose_stamped.pose.position.y
-            raw_points.append([x, y])
-        
-        path_points = []
-        if len(raw_points) > 1:
-            for i in range(len(raw_points) - 1):
-                p1 = np.array(raw_points[i])
-                p2 = np.array(raw_points[i+1])
-                # Insert 200 points between p1 and p2 (total 202 points per segment, excluding last to avoid duplicates)
-                segment = np.linspace(p1, p2, 202)[:-1]
-                path_points.extend(segment)
-            path_points.append(raw_points[-1])
-        elif len(raw_points) == 1:
-            path_points = raw_points
-        
+            path_points.append([x, y])
+
         if len(path_points) > 0:
             self.path = np.array(path_points)
             self.path_received = True
@@ -90,7 +106,9 @@ class TrajectoryFollower(Node):
             # Reset controller state for new path
             self.nav.finished = False 
             self.nav.last_closest_idx = 0
-            self.get_logger().info(f"Received new path with {len(self.path)} interpolated points (from {len(raw_points)} original).")
+            self.get_logger().info(f"Received new path with {len(self.path)} points.")
+        else:
+            self.get_logger().info("No path received.")
 
     def control_loop(self):
         if not self.odom_received or not self.path_received:
