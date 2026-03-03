@@ -296,8 +296,13 @@
       var yawRad = Math.atan2(siny_cosp, cosy_cosp);
       var yawDeg = yawRad * (180 / Math.PI);
 
-      // Normalize to 0-360
-      let displayHeading = (yawDeg + 360) % 360;
+      // Normalize to -180 to +180 (0 is East, positive is CCW, negative is CW)
+      let displayHeading = yawDeg;
+      if (displayHeading > 180) {
+        displayHeading -= 360;
+      } else if (displayHeading < -180) {
+        displayHeading += 360;
+      }
 
       document.getElementById('val_odom_heading').innerHTML = displayHeading.toFixed(1);
     });
@@ -317,10 +322,22 @@
       var yawRad = Math.atan2(siny_cosp, cosy_cosp);
       var yawDeg = yawRad * (180 / Math.PI);
 
-      let displayHeading = (yawDeg + 360) % 360;
+      // Normalize to -180 to +180 (0 is East, positive is CCW, negative is CW)
+      let displayHeading = yawDeg;
+      if (displayHeading > 180) {
+        displayHeading -= 360;
+      } else if (displayHeading < -180) {
+        displayHeading += 360;
+      }
+
       currentHeading = displayHeading;
 
       if (robotIconImg) {
+        // In Leaflet, rotation is usually clockwise. 
+        // 0 degrees corresponds to pointing North but visually rotating it requires offsetting.
+        // Assuming your icon points North natively:
+        // Math: ENU sets East=0. But map is North=Up. North in ENU is 90 deg.
+        // Icon rotation needed (clockwise) = 90 - heading. 
         robotIconImg.style.transform = `rotate(${90 - currentHeading}deg)`;
       }
       document.getElementById('BNO085-absolute-heading').innerHTML = currentHeading.toFixed(1);
