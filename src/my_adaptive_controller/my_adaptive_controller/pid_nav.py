@@ -14,16 +14,6 @@ class PIDController:
         self.last_closest_idx = 0
         self.finished = False
 
-    def reset(self):
-        # Reset internal states for a new path
-        self.prev_error = 0.0
-        self.integral = 0.0
-        self.prev_d_term = 0.0
-        self.last_v = 0.0
-        self.last_w = 0.0
-        self.last_closest_idx = 0
-        self.finished = False
-
     def compute(self, current_pose, path_points, dt):
         if self.finished:
             return 0.0, 0.0

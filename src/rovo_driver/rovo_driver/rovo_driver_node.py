@@ -402,7 +402,8 @@ class RovoDriverNode(Node):
     def enter_manual_mode(self):     
         """Switch to manual mode"""
         self.watchdog_timer.cancel() # Stop watchdog if running
-        self.set_cyclic_message(0x28A, [0] * 8) # reset speed outputs
+        self.set_cyclic_message(0x28A, [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0]) # reset speed outputs
+        #time.sleep(1)
         self.set_cyclic_message(0x18A, [0x00, 0x00, 0x00])  # Deactivate external control
         self.get_logger().info("Deactivated external control")
         #self.publish_diagnostic(DiagnosticStatus.OK, "External control deactivated")
@@ -455,7 +456,7 @@ class RovoDriverNode(Node):
             (right_rpm >> 8) & 0xFF,    # Byte6
             self.alive_counter & 0xFF   # Byte7 (Alive)
         ]
-
+        #self.get_logger().info(f"Sending can speed message left_rpm: {left_rpm}, right_rpm: {right_rpm} ")
         # Send
         self.set_cyclic_message(0x28A, data)
 
