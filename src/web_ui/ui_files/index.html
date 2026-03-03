@@ -107,7 +107,6 @@
 
   <div id="status-overlay">
     <strong>ROS-Verbindungsstatus:</strong> <span id="status">Wird verbunden...</span><br>
-    <strong>Robot-Status:</strong> <span id="robot-status">Warte auf Daten...</span>
   </div>
 
   <div id="overlay-container">
@@ -151,20 +150,28 @@
     </div>
 
     <div class="data-section" style="margin-top: 20px;">
-      <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">Global Odometry</h3>
+      <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">Filtered Odometry</h3>
       <div><strong>X:</strong> <span id="val_odom_x">--</span> m</div>
       <div><strong>Y:</strong> <span id="val_odom_y">--</span> m</div>
       <div><strong>Heading:</strong> <span id="val_odom_heading">--</span> °</div>
+    </div>
+
+    <div class="data-section" style="margin-top: 20px;">
+      <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">Rovo Logs</h3>
+      <div id="rovo-logs"
+        style="height: 120px; overflow-y: scroll; font-size: 11px; font-family: monospace; background: #f9f9f9; border: 1px solid #ccc; padding: 5px;">
+        <!-- Logs werden hier eingefügt -->
+      </div>
     </div>
 
   </div>
 
   <div id="command-buttons">
     <h3>Befehle senden:</h3>
-    <button onclick="sendCommand('START')">Start</button>
-    <button onclick="sendCommand('STOP')">Stopp</button>
+    <!-- <button onclick="sendCommand('START')">Start</button>
+    <button onclick="sendCommand('STOP')">Stopp</button> -->
     <button onclick="zoomToRobot()">Zoom auf Roboter</button>
-    <br>
+    <!-- <br> -->
     <button onclick="togglePath()" style="margin-top: 5px;">Pfad Visu an/aus</button>
     <button onclick="resetPath()" style="margin-top: 5px; margin-left: 5px;">Reset Pfad</button>
 
@@ -346,8 +353,6 @@
         default: statusText = "Unknown (" + message.status.status + ")"; color = "grey";
       }
       document.getElementById('ZED-F9P-status').innerHTML = `<span style="color: ${color};">${statusText}</span>`;
-
-      document.getElementById('robot-status').innerHTML = '<span style="color: blue;">Positionsdaten empfangen</span>';
     });
 
     // === 4. BNO085 Kalibrierungs-Status ===
@@ -448,13 +453,13 @@
       messageType: 'std_msgs/String'
     });
 
-    function sendCommand(commandName) {
-      var msg = new ROSLIB.Message({
-        data: commandName
-      });
-      console.log('Sende Befehl: ' + msg.data);
-      cmdTopic.publish(msg);
-    }
+    // function sendCommand(commandName) {
+    //   var msg = new ROSLIB.Message({
+    //     data: commandName
+    //   });
+    //   console.log('Sende Befehl: ' + msg.data);
+    //   cmdTopic.publish(msg);
+    // }
 
     // === 7. Mode Control & Heartbeat ===
     var setModeTopic = new ROSLIB.Topic({
@@ -778,6 +783,55 @@
       // Optional: Zeichnen Modus beenden nach senden
       if (isDrawingPath) toggleDrawingMode();
     }
+
+    // === 11. ROS Logger (rosout) abonnieren ===
+    // Alle Python log-Befehle (self.get_logger().info) werden automatisch auf /rosout gespiegelt.
+    var rosoutTopic = new ROSLIB.Topic({
+      ros: ros,
+      name: '/rosout',
+      messageType: 'rcl_interfaces/msg/Log'
+    });
+
+    var logContainer = document.getElementById('rovo-logs');
+
+    rosoutTopic.subscribe(function (message) {
+      // Nur Nachrichten der rovo_driver_node anzeigen
+      if (message.name === 'rovo_driver_node') {
+        var logLevel = "UNKNOWN";
+        var color = "black";
+
+        // Level von rcl_interfaces/msg/Log:
+        // 10: DEBUG, 20: INFO, 30: WARN, 40: ERROR, 50: FATAL
+        switch (message.level) {
+          case 10: logLevel = "DEBUG"; color = "gray"; break;
+          case 20: logLevel = "INFO"; color = "green"; break;
+          case 30: logLevel = "WARN"; color = "orange"; break;
+          case 40: logLevel = "ERROR"; color = "red"; break;
+          case 50: logLevel = "FATAL"; color = "darkred"; fontWeigth = "bold"; break;
+        }
+
+        var logEntry = document.createElement("div");
+        logEntry.style.color = color;
+        logEntry.style.marginBottom = "2px";
+
+        // Füge Zeitstempel hinzu (optional)
+        var date = new Date((message.stamp.sec * 1000) + (message.stamp.nanosec / 1000000));
+        var timeStr = date.toLocaleTimeString('de-DE', { hour12: false }) + "." + String(date.getMilliseconds()).padStart(3, '0');
+
+        logEntry.innerHTML = `[${timeStr}] [<b>${logLevel}</b>]: ${message.msg}`;
+
+        logContainer.appendChild(logEntry);
+
+        // Damit nicht zu viele Einträge den Browser verlangsamen (max. 50 Einträge)
+        if (logContainer.childNodes.length > 50) {
+          logContainer.removeChild(logContainer.firstChild);
+        }
+
+        // Auto-Scroll nach unten
+        logContainer.scrollTop = logContainer.scrollHeight;
+      }
+    });
+
   </script>
 </body>
 

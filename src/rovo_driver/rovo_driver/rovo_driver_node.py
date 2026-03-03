@@ -43,8 +43,6 @@ class RovoDriverNode(Node):
         self.cyclic_messages = {}  # Dictionary for multiple messages
         self.cyclic_lock = threading.Lock()  # Lock for thread safety
 
-
-
         self.speed_setpoint_received = False
                 
         # Publisher for rovo mode
@@ -65,6 +63,7 @@ class RovoDriverNode(Node):
         # Watchdog Timer (1.0s timeout)
         self.watchdog_timer = self.create_timer(1.0, self.watchdog_timeout)
         self.watchdog_timer.cancel() # Start cancelled
+
         # Publisher for speed data
         self.speed_publisher = self.create_publisher(
             Twist,
@@ -334,15 +333,15 @@ class RovoDriverNode(Node):
         """Handle mode switching from external topic"""
         requested_mode = msg.data
         
-        if requested_mode == 0: # Manual request
+        if RovoMode(requested_mode) == RovoMode.MANUAL: # Manual request
             #if self.mode != RovoMode.MANUAL:
                 self.enter_manual_mode()
                 
-        elif requested_mode == 1: # Automatic request
+        elif RovoMode(requested_mode) == RovoMode.AUTOMATIC: # Automatic request
             #if self.mode != RovoMode.AUTOMATIC:
                 self.enter_automatic_mode()
 
-        elif requested_mode == 2: # Automatic Watchdog request
+        elif RovoMode(requested_mode) == RovoMode.AUTOMATIC_WATCHDOG: # Automatic Watchdog request
             #if self.mode != RovoMode.AUTOMATIC_WATCHDOG:
                 self.enter_automatic_watchdog_mode()
 
@@ -365,7 +364,8 @@ class RovoDriverNode(Node):
         self.watchdog_timer.cancel()
         
         if not self.activate_external_control():
-            self.get_logger().error("Failed to activate external control")
+            self.get_logger().error("Failed to activate external control --> GEAR not 0?")
+            self.enter_manual_mode()
             return
 
         self.mode = RovoMode.AUTOMATIC
@@ -383,7 +383,8 @@ class RovoDriverNode(Node):
         """Switch to automatic mode with watchdog"""
                
         if not self.activate_external_control():
-            self.get_logger().error("Failed to activate external control")
+            self.get_logger().error("Failed to activate external control --> GEAR not 0?")
+            self.enter_manual_mode()
             return
 
         self.mode = RovoMode.AUTOMATIC_WATCHDOG
@@ -410,7 +411,7 @@ class RovoDriverNode(Node):
         mode_msg = Int32()
         mode_msg.data = RovoMode.MANUAL.value
         self.mode_publisher.publish(mode_msg)
-        self.get_logger().info("→ ROVO JOYSTICK (MANUAL) MODE activated")
+        self.get_logger().info("→ MANUAL MODE activated")
 
     
     def update_automatic_mode(self, msg):
