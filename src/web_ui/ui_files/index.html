@@ -845,41 +845,39 @@
     var logContainer = document.getElementById('rovo-logs');
 
     rosoutTopic.subscribe(function (message) {
-      // Nur Nachrichten der rovo_driver_node anzeigen
-      if (message.name === 'rovo_driver_node') {
-        var logLevel = "UNKNOWN";
-        var color = "black";
+      // Alle Nachrichten (jeder Node) anzeigen
+      var logLevel = "UNKNOWN";
+      var color = "black";
 
-        // Level von rcl_interfaces/msg/Log:
-        // 10: DEBUG, 20: INFO, 30: WARN, 40: ERROR, 50: FATAL
-        switch (message.level) {
-          case 10: logLevel = "DEBUG"; color = "gray"; break;
-          case 20: logLevel = "INFO"; color = "green"; break;
-          case 30: logLevel = "WARN"; color = "orange"; break;
-          case 40: logLevel = "ERROR"; color = "red"; break;
-          case 50: logLevel = "FATAL"; color = "darkred"; fontWeigth = "bold"; break;
-        }
-
-        var logEntry = document.createElement("div");
-        logEntry.style.color = color;
-        logEntry.style.marginBottom = "2px";
-
-        // Füge Zeitstempel hinzu (optional)
-        var date = new Date((message.stamp.sec * 1000) + (message.stamp.nanosec / 1000000));
-        var timeStr = date.toLocaleTimeString('de-DE', { hour12: false }) + "." + String(date.getMilliseconds()).padStart(3, '0');
-
-        logEntry.innerHTML = `[${timeStr}] [<b>${logLevel}</b>]: ${message.msg}`;
-
-        logContainer.appendChild(logEntry);
-
-        // Damit nicht zu viele Einträge den Browser verlangsamen (max. 50 Einträge)
-        if (logContainer.childNodes.length > 50) {
-          logContainer.removeChild(logContainer.firstChild);
-        }
-
-        // Auto-Scroll nach unten
-        logContainer.scrollTop = logContainer.scrollHeight;
+      // Level von rcl_interfaces/msg/Log:
+      // 10: DEBUG, 20: INFO, 30: WARN, 40: ERROR, 50: FATAL
+      switch (message.level) {
+        case 10: logLevel = "DEBUG"; color = "gray"; break;
+        case 20: logLevel = "INFO"; color = "green"; break;
+        case 30: logLevel = "WARN"; color = "orange"; break;
+        case 40: logLevel = "ERROR"; color = "red"; break;
+        case 50: logLevel = "FATAL"; color = "darkred"; fontWeigth = "bold"; break;
       }
+
+      var logEntry = document.createElement("div");
+      logEntry.style.color = color;
+      logEntry.style.marginBottom = "2px";
+
+      // Füge Zeitstempel hinzu (optional)
+      var date = new Date((message.stamp.sec * 1000) + (message.stamp.nanosec / 1000000));
+      var timeStr = date.toLocaleTimeString('de-DE', { hour12: false }) + "." + String(date.getMilliseconds()).padStart(3, '0');
+
+      logEntry.innerHTML = `[${timeStr}] <b>[${message.name}]</b> [<b>${logLevel}</b>]: ${message.msg}`;
+
+      logContainer.appendChild(logEntry);
+
+      // Damit nicht zu viele Einträge den Browser verlangsamen (max. 100 Einträge)
+      if (logContainer.childNodes.length > 100) {
+        logContainer.removeChild(logContainer.firstChild);
+      }
+
+      // Auto-Scroll nach unten
+      logContainer.scrollTop = logContainer.scrollHeight;
     });
 
   </script>
