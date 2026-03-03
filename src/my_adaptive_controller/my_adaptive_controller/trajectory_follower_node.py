@@ -3,6 +3,10 @@ from rclpy.node import Node
 import numpy as np
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry, Path
+from robot_localization.srv import FromLL
+from geographic_msgs.msg import GeoPoint
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from .pid_nav import PIDController
 
 class TrajectoryFollower(Node):
@@ -36,9 +40,13 @@ class TrajectoryFollower(Node):
         self.path_received = False
 
         # 5. PUBS/SUBS
+        self.cb_group = ReentrantCallbackGroup()
         self.create_subscription(Odometry, '/odometry/filtered', self.odom_cb, 10)
-        self.create_subscription(Path, '/set_trajectory', self.path_cb, 10)
+        self.create_subscription(Path, '/set_trajectory', self.path_cb, 10, callback_group=self.cb_group)
         self.cmd_pub = self.create_publisher(Twist, '/rovo/set_speed', 10)
+
+        # 6. SRV CLIENTS
+        self.from_ll_client = self.create_client(FromLL, '/fromLL', callback_group=self.cb_group)
 
         self.create_timer(0.1, self.control_loop)
         self.get_logger().info("Trajectory Follower Active. Waiting for /set_trajectory and /odometry/filtered.")
@@ -63,7 +71,7 @@ class TrajectoryFollower(Node):
         
         self.odom_received = True
 
-    def path_cb(self, msg):
+    async def path_cb(self, msg):
         # # Extract points from Path message
         # raw_points = []
         # for pose_stamped in msg.poses:
@@ -92,24 +100,72 @@ class TrajectoryFollower(Node):
         #     self.nav.last_closest_idx = 0
         #     self.get_logger().info(f"Received new path with {len(self.path)} interpolated points (from {len(raw_points)} original).")
         
-        # Extract points from Path message
-        path_points = []
+        # We assume the UI sends Path where x = Latitude and y = Longitude
+        gps_points = []
         for pose_stamped in msg.poses:
-            x = pose_stamped.pose.position.x
-            y = pose_stamped.pose.position.y
-            path_points.append([x, y])
+            lat = pose_stamped.pose.position.x
+            lon = pose_stamped.pose.position.y
+            gps_points.append((lat, lon))
 
-        if len(path_points) > 0:
-            self.path = np.array(path_points)
+        if len(gps_points) == 0:
+            self.nav.finished = True
+            self.path_received = False
+            self.get_logger().info("No path received, deactivating controller.")
+            return
+
+        self.get_logger().info(f"Received new GPS path with {len(gps_points)} points. Converting to map frame...")
+        
+        if not self.from_ll_client.wait_for_service(timeout_sec=2.0):
+            self.get_logger().error("Service /fromLL is not available. Cannot convert path!")
+            return
+
+        # Convert all points using the service
+        converted_path = []
+        for lat, lon in gps_points:
+            req = FromLL.Request()
+            req.ll_point.latitude = float(lat)
+            req.ll_point.longitude = float(lon)
+            req.ll_point.altitude = 0.0
+            
+            # Use async/await to yield execution back to the executor
+            try:
+                response = await self.from_ll_client.call_async(req)
+                map_pt = response.map_point
+                converted_path.append([map_pt.x, map_pt.y])
+            except Exception as e:
+                self.get_logger().warn(f"Failed to convert point {lat}, {lon}: {e}")
+        
+        if len(converted_path) > 0:
+            # Interpolate points every 5mm (0.005 meters)
+            interpolated_path = []
+            interpolated_path.append(converted_path[0])
+
+            for i in range(len(converted_path) - 1):
+                p1 = np.array(converted_path[i])
+                p2 = np.array(converted_path[i + 1])
+                dist = np.linalg.norm(p2 - p1)
+
+                step_size = 0.005  # 5 mm
+                num_steps = int(np.ceil(dist / step_size))
+
+                if num_steps == 0:
+                    continue
+
+                for j in range(1, num_steps + 1):
+                    interp_pt = p1 + (p2 - p1) * (j / float(num_steps))
+                    interpolated_path.append(interp_pt.tolist())
+
+            self.path = np.array(interpolated_path)
             self.path_received = True
             
             # Reset controller state for new path
             self.nav.finished = False 
             self.nav.last_closest_idx = 0
-            self.get_logger().info(f"Received new path with {len(self.path)} points.")
+            self.get_logger().info(f"Successfully converted, interpolated and loaded path with {len(self.path)} points.")
         else:
             self.nav.finished = True
-            self.get_logger().info("No path received, deactivating controller.")
+            self.path_received = False
+            self.get_logger().error("Path conversion failed completely.")
 
     def control_loop(self):
         if not self.odom_received or not self.path_received:
@@ -131,5 +187,14 @@ class TrajectoryFollower(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    rclpy.spin(TrajectoryFollower())
-    rclpy.shutdown()
+    node = TrajectoryFollower()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+    
+    try:
+        executor.spin()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
