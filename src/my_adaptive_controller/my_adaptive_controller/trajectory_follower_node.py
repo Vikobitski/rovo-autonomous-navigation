@@ -108,7 +108,8 @@ class TrajectoryFollower(Node):
             self.nav.last_closest_idx = 0
             self.get_logger().info(f"Received new path with {len(self.path)} points.")
         else:
-            self.get_logger().info("No path received.")
+            self.nav.finished = True
+            self.get_logger().info("No path received, deactivating controller.")
 
     def control_loop(self):
         if not self.odom_received or not self.path_received:

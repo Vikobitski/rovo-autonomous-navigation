@@ -346,6 +346,9 @@
 
     });
 
+    // Variable to track if we have zoomed to the first received position
+    var initialPositionSet = false;
+
     // 3.2 GPS-Daten (Position)
     var gpsTopic = new ROSLIB.Topic({
       ros: ros,
@@ -356,6 +359,13 @@
       currentLat = message.latitude;
       currentLon = message.longitude;
       robotMarker.setLatLng([currentLat, currentLon]);
+
+      // Zentriere die Karte beim ersten gültigen Positions-Update auf den Roboter
+      if (!initialPositionSet && currentLat !== 0 && currentLon !== 0) {
+        map.setView([currentLat, currentLon], 19);
+        initialPositionSet = true;
+      }
+
       document.getElementById('ZED-F9P-lat').innerHTML = currentLat.toFixed(8);
       document.getElementById('ZED-F9P-lon').innerHTML = currentLon.toFixed(8);
 
@@ -743,8 +753,17 @@
     }
 
     function sendPlannedPath() {
-      if (plannedPathPoints.length < 2) {
-        alert("Bitte zeichne mindestens 2 Punkte für einen Pfad.");
+      // Wenn keine Punkte gezeichnet wurden, sende einen leeren Pfad um den Roboter zu stoppen
+      if (plannedPathPoints.length < 1) {
+        var emptyPathMsg = new ROSLIB.Message({
+          header: {
+            frame_id: 'map',
+            stamp: { sec: 0, nanosec: 0 }
+          },
+          poses: []
+        });
+        console.log("Sende leeren Pfad.");
+        plannedPathTopic.publish(emptyPathMsg);
         return;
       }
 
