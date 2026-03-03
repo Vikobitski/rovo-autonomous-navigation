@@ -23,7 +23,7 @@ class TrajectoryFollower(Node):
 
         params = {
             'Kp': 0.35, 'Ki': 0.0, 'Kd': 0.0, 'I_max': 0.2,
-            'v_des': 0.15, 'v_max': 0.3, 'lookahead_dist': 0.5,
+            'v_des': 0.28, 'v_max': 0.3, 'lookahead_dist': 0.5,
             'dist_thresh': 0.25, 'w_sat': 0.5, 
             'accel_lin_max': 1, 'accel_ang_max': 3.14
         }
@@ -71,35 +71,13 @@ class TrajectoryFollower(Node):
         
         self.odom_received = True
 
-    async def path_cb(self, msg):
-        # # Extract points from Path message
-        # raw_points = []
-        # for pose_stamped in msg.poses:
-        #     x = pose_stamped.pose.position.x
-        #     y = pose_stamped.pose.position.y
-        #     raw_points.append([x, y])
-        
-        # path_points = []
-        # if len(raw_points) > 1:
-        #     for i in range(len(raw_points) - 1):
-        #         p1 = np.array(raw_points[i])
-        #         p2 = np.array(raw_points[i+1])
-        #         # Insert 200 points between p1 and p2 (total 202 points per segment, excluding last to avoid duplicates)
-        #         segment = np.linspace(p1, p2, 202)[:-1]
-        #         path_points.extend(segment)
-        #     path_points.append(raw_points[-1])
-        # elif len(raw_points) == 1:
-        #     path_points = raw_points
-        
-        # if len(path_points) > 0:
-        #     self.path = np.array(path_points)
-        #     self.path_received = True
-            
-        #     # Reset controller state for new path
-        #     self.nav.finished = False 
-        #     self.nav.last_closest_idx = 0
-        #     self.get_logger().info(f"Received new path with {len(self.path)} interpolated points (from {len(raw_points)} original).")
-        
+    def path_cb(self, msg):
+        import threading
+        # Offload logic to a background thread so we don't block the executor
+        threading.Thread(target=self._process_path_thread, args=(msg,), daemon=True).start()
+
+    def _process_path_thread(self, msg):
+        import time
         # We assume the UI sends Path where x = Latitude and y = Longitude
         gps_points = []
         for pose_stamped in msg.poses:
@@ -127,13 +105,23 @@ class TrajectoryFollower(Node):
             req.ll_point.longitude = float(lon)
             req.ll_point.altitude = 0.0
             
-            # Use async/await to yield execution back to the executor
-            try:
-                response = await self.from_ll_client.call_async(req)
-                map_pt = response.map_point
-                converted_path.append([map_pt.x, map_pt.y])
-            except Exception as e:
-                self.get_logger().warn(f"Failed to convert point {lat}, {lon}: {e}")
+            future = self.from_ll_client.call_async(req)
+            # Wait for future without blocking the global ROS executor
+            start_wait = time.time()
+            while not future.done():
+                if time.time() - start_wait > 2.0:
+                    self.get_logger().error("Timeout waiting for /fromLL response")
+                    break
+                time.sleep(0.01)
+
+            if future.done():
+                try:
+                    response = future.result()
+                    if response is not None:
+                        map_pt = response.map_point
+                        converted_path.append([map_pt.x, map_pt.y])
+                except Exception as e:
+                    self.get_logger().warn(f"Failed to convert point {lat}, {lon}: {e}")
         
         if len(converted_path) > 0:
             # Interpolate points every 5mm (0.005 meters)
