@@ -376,7 +376,7 @@ class RovoDriverNode(Node):
         # Initialize speed mode command
         self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
         self.send_can_message(0x28A, [0] * 8)
-
+        time.sleep(1)
         self.get_logger().info("→ AUTOMATIC MODE activated")
 
     def enter_automatic_watchdog_mode(self):
