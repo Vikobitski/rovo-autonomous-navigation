@@ -368,15 +368,20 @@ class RovoDriverNode(Node):
             self.enter_manual_mode()
             return
 
-        self.mode = RovoMode.AUTOMATIC
-        rovo_status_msg = Int32()
-        rovo_status_msg.data = RovoMode.AUTOMATIC.value
-        self.mode_publisher.publish(rovo_status_msg)
+        # self.mode = RovoMode.AUTOMATIC
+        # rovo_status_msg = Int32()
+        # rovo_status_msg.data = RovoMode.AUTOMATIC.value
+        # self.mode_publisher.publish(rovo_status_msg)
         
         # Initialize speed mode command
         self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
         self.send_can_message(0x28A, [0] * 8)
         time.sleep(1)
+
+        self.mode = RovoMode.AUTOMATIC
+        rovo_status_msg = Int32()
+        rovo_status_msg.data = RovoMode.AUTOMATIC.value
+        self.mode_publisher.publish(rovo_status_msg)
         self.get_logger().info("→ AUTOMATIC MODE activated")
 
     def enter_automatic_watchdog_mode(self):
@@ -386,6 +391,10 @@ class RovoDriverNode(Node):
             self.get_logger().error("Failed to activate external control --> GEAR not 0?")
             self.enter_manual_mode()
             return
+        
+        self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
+        self.send_can_message(0x28A, [0] * 8)
+        time.sleep(1)
 
         self.mode = RovoMode.AUTOMATIC_WATCHDOG
         self.watchdog_timer.reset() # Start/Reset watchdog timer
@@ -393,9 +402,6 @@ class RovoDriverNode(Node):
         rovo_status_msg = Int32()
         rovo_status_msg.data = RovoMode.AUTOMATIC_WATCHDOG.value
         self.mode_publisher.publish(rovo_status_msg)
-        
-        self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
-        self.send_can_message(0x28A, [0] * 8)
 
         self.get_logger().info("→ AUTOMATIC WATCHDOG MODE activated")
 
