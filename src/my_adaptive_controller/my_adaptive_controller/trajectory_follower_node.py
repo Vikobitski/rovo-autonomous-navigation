@@ -25,7 +25,7 @@ class TrajectoryFollower(Node):
         params = {
             'Kp': 1.5, 'Ki': 0.0, 'Kd': 0.0, 'I_max': 0.2,
             'v_des': 0.28, 'v_max': 0.3, 'lookahead_dist': 0.5,
-            'dist_thresh': 0.25, 'w_sat': 1.5, 
+            'dist_thresh': 0.25, 'w_sat': 0.5, 
             'accel_lin_max': 1, 'accel_ang_max': 3.14
         }
 
