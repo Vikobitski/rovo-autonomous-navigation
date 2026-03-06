@@ -25,14 +25,14 @@ class Bno085Node(Node):
     def __init__(self):
         super().__init__('bno085_node')
 
-        # --- Parameter ---
+        # --- Parameters ---
         self.declare_parameter('frame_id', 'imu_link')
         self.frame_id = self.get_parameter('frame_id').value
         
         self.declare_parameter('yaw_offset_deg', 0.0)
         self.yaw_offset_deg = self.get_parameter('yaw_offset_deg').value
         
-        # --- Hardware-Initialisierung ---
+        # --- Hardware-Initialisation ---
         try:
             self.i2c = busio.I2C(board.SCL, board.SDA, frequency=400000)
             self.bno = BNO08X_I2C(self.i2c)
@@ -42,7 +42,7 @@ class Bno085Node(Node):
             rclpy.shutdown()
             return
 
-        # --- Sensor-Features aktivieren ---
+        # --- Activate sensor features ---
         self.bno.enable_feature(BNO_REPORT_ROTATION_VECTOR)
         self.bno.enable_feature(BNO_REPORT_ACCELEROMETER)
         self.bno.enable_feature(BNO_REPORT_GYROSCOPE)
@@ -64,18 +64,18 @@ class Bno085Node(Node):
         current_time = self.get_clock().now().to_msg()
         
         try:
-            # --- 1. Imu-Daten lesen und veröffentlichen ---
+            # --- 1. read and publish imu-data ---
             
-            # .quaternion nutzt den ROTATION_VECTOR (absolut, mit Magnetometer)
+            # .quaternion uses the ROTATION_VECTOR (absolute, with magnetometer)
             quat = self.bno.quaternion 
             accel = self.bno.acceleration
             gyro = self.bno.gyro
 
             if not all([quat, accel, gyro]):
-                self.get_logger().warn("Einige Sensordaten sind 'None'. Überspringe Tick.")
+                self.get_logger().warn("Some sensor data is 'None'. Skipping tick.")
                 return
 
-            # --- Yaw Offset für Konvertierung von Norden=0 auf Osten=0 ---
+            # --- Yaw Offset for conversion from North=0 to East=0 ---
             yaw_offset_rad = math.radians(self.yaw_offset_deg)
             q_off_w = math.cos(yaw_offset_rad / 2.0)
             q_off_x = 0.0
@@ -84,7 +84,7 @@ class Bno085Node(Node):
 
             qx, qy, qz, qw = quat[0], quat[1], quat[2], quat[3]
 
-            # Quaternionen-Multiplikation für Z-Achsen-Rotation (q_offset * q_orig)
+            # Quaternion multiplication for Z-axis rotation (q_offset * q_orig)
             new_w = q_off_w * qw - q_off_x * qx - q_off_y * qy - q_off_z * qz
             new_x = q_off_w * qx + q_off_x * qw + q_off_y * qz - q_off_z * qy
             new_y = q_off_w * qy - q_off_x * qz + q_off_y * qw + q_off_z * qx
@@ -107,7 +107,7 @@ class Bno085Node(Node):
             msg.linear_acceleration.y = accel[1]
             msg.linear_acceleration.z = accel[2]
             
-            # Kovarianzen (Standardwerte)
+            # Covariances (standard values)
             msg.orientation_covariance[0] = 0.01
             msg.orientation_covariance[4] = 0.01
             msg.orientation_covariance[8] = 0.01
@@ -120,9 +120,9 @@ class Bno085Node(Node):
 
             self.imu_publisher.publish(msg)
 
-            # --- 2. Kalibrierungsstatus lesen und veröffentlichen ---
+            # --- 2. read and publish calibration status ---
             
-            # .calibration_status gibt einen einzelnen Integer (0-3) zurück.
+            # .calibration_status returns a single integer (0-3).
             cal_status = self.bno.calibration_status 
 
             calib_msg = Int8()
@@ -131,7 +131,7 @@ class Bno085Node(Node):
 
 
         except Exception as e:
-            self.get_logger().warn(f"Fehler im Timer-Callback: {e}")
+            self.get_logger().warn(f"Error in timer callback: {e}")
 
 def main(args=None):
     rclpy.init(args=args)
