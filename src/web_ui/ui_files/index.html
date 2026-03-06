@@ -30,21 +30,14 @@
       padding: 10px;
       border-radius: 5px;
       z-index: 1000;
-      /* Stellt sicher, dass es über der Karte liegt */
     }
 
-    /* Der Haupt-Container für das Overlay */
     #overlay-container {
       position: absolute;
-      /* Schwebt über der Karte */
       top: 10px;
-      /* Abstand von oben */
       left: 10px;
-      /* Abstand von links */
       z-index: 1000;
-      /* Sicherstellen, dass es über der Karte liegt */
       background-color: rgba(255, 255, 255, 0.9);
-      /* Weißer, leicht transparenter Hintergrund */
       padding: 15px;
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
@@ -52,16 +45,12 @@
       max-width: 300px;
     }
 
-    /* Stil für die einzelnen Sektionen im Container */
     .data-section {
       margin-bottom: 15px;
-      /* Abstand zwischen den Blöcken */
       border-bottom: 1px solid #ccc;
-      /* Optional: Trennlinie */
       padding-bottom: 10px;
     }
 
-    /* Die letzte Sektion braucht keinen Abstand nach unten */
     .data-section:last-child {
       margin-bottom: 0;
       border-bottom: none;
@@ -84,19 +73,14 @@
       border-radius: 5px;
     }
 
-    /* NEU: Stil für den unsichtbaren Leaflet-Container */
     .robot-div-icon {
       background: none;
       border: none;
     }
 
-    /* Stil für unser rotierendes Icon (bleibt gleich) */
     .robot-icon {
       width: 32px;
-      /* Größe deines Bildes */
       height: 32px;
-      /* Größe deines Bildes */
-      /* CSS-Trick, um den Drehpunkt in die Mitte zu legen */
       transform-origin: center center;
     }
   </style>
@@ -106,43 +90,26 @@
   <div id="map"></div>
 
   <div id="status-overlay">
-    <strong>ROS-Verbindungsstatus:</strong> <span id="status">Wird verbunden...</span><br>
+    <strong>ROS connection status:</strong> <span id="status">Connecting...</span><br>
   </div>
 
   <div id="overlay-container">
 
     <div class="data-section">
-      <h3>Aktuelle Daten:</h3>
+      <h3>Current Data:</h3>
 
-      <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">ZED-F9P</h3>
+      <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">ZED-F9P (RTK-Module)</h3>
       <div><strong>Lat:</strong> <span id="ZED-F9P-lat">N/A</span></div>
       <div><strong>Lon:</strong> <span id="ZED-F9P-lon">N/A</span></div>
       <div><strong>Status:</strong> <span id="ZED-F9P-status" style="font-weight: bold;">N/A</span></div>
 
-      <!-- <h3 style="margin-top: 15px;">Heading</h3>
-      <div>Heading (GPS): <span id="ZED-F9P_heading">--</span> °</div>
-      <div>Genauigkeit: ± <span id="ZED-F9P_heading_acc">--</span> °</div>
-
-      <div style="height: 5px;"></div>
-
-      <div>Heading (Vektor): <span id="ZED-F9P_heading_calc">--</span> °</div>
-
-      <h3 style="margin-top: 15px;">Geschwindigkeit (m/s)</h3>
-      <div>Ground Speed: <span id="ZED-F9P_speed_g">--</span> m/s</div>
-      <div>Vel Nord (N): <span id="ZED-F9P_vel_n">--</span> m/s</div>
-      <div>Vel Ost (E): <span id="ZED-F9P_vel_e">--</span> m/s</div>
-      <div>Vel Runter (D): <span id="ZED-F9P_vel_d">--</span> m/s</div> -->
-
       <div style="margin-top: 10px;">
         <strong>Fix-type:</strong> <span id="ZED-F9P_fix-type" style="font-weight: bold;">N/A</span>
       </div>
-
-      <!-- <div><strong>flags:</strong> <span id="ZED-F9P_flags" style="font-weight: bold;">N/A</span></div>
-      <div><strong>flags2:</strong> <span id="ZED-F9P_flags2" style="font-weight: bold;">N/A</span></div> -->
     </div>
 
     <div class="data-section" style="margin-top: 20px;">
-      <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">BNO085</h3>
+      <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">BNO085 (IMU)</h3>
       <div>Heading:<span id="BNO085-absolute-heading">N/A</span>&deg;</div>
       <div>Angular Velocity (z):<span id="BNO085-angular-velocity">N/A</span> rad/s</div>
       <div>Linear Acceleration (x):<span id="BNO085-linear-acceleration">N/A</span> m/s^2</div>
@@ -160,23 +127,21 @@
       <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">Rovo Logs</h3>
       <div id="rovo-logs"
         style="height: 120px; overflow-y: scroll; font-size: 11px; font-family: monospace; background: #f9f9f9; border: 1px solid #ccc; padding: 5px;">
-        <!-- Logs werden hier eingefügt -->
       </div>
     </div>
 
   </div>
 
   <div id="command-buttons">
-    <h3>Befehle senden:</h3>
-    <!-- <button onclick="sendCommand('START')">Start</button>
-    <button onclick="sendCommand('STOP')">Stopp</button> -->
-    <button onclick="zoomToRobot()">Zoom auf Roboter</button>
-    <!-- <br> -->
-    <button onclick="togglePath()" style="margin-top: 5px;">Pfad Visu an/aus</button>
-    <button onclick="resetPath()" style="margin-top: 5px; margin-left: 5px;">Reset Pfad</button>
+    <h3>Send commands:</h3>
+    <button onclick="zoomToRobot()">Zoom to robot</button>
+    <button onclick="togglePath()" style="margin-top: 5px;">Path visualization on/off</button>
+    <button onclick="resetPath()" style="margin-top: 5px; margin-left: 5px;">Reset path visualization</button>
 
 
-    <div style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px;">
+    <!-- direct speed control - only for testing-->
+
+    <!-- <div style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px;">
       <div style="margin-bottom: 5px;">
         <label>Lin. Speed (m/s):</label><br>
         <input type="number" id="input_linear_x" step="0.1" value="0.0" style="width: 60px;">
@@ -185,17 +150,18 @@
         <label>Ang. Speed (rad/s):</label><br>
         <input type="number" id="input_angular_z" step="0.1" value="0.0" style="width: 60px;">
       </div>
-      <button onclick="sendSpeed()" style="width: 100%; padding: 5px; cursor: pointer;">Sende Geschwindigkeit</button>
-    </div>
+      <button onclick="sendSpeed()" style="width: 100%; padding: 5px; cursor: pointer;">Send speed</button>
+    </div> -->
+
     <hr>
-    <h3>Trajektorie erstellen:</h3>
-    <button id="btn-draw-path" onclick="toggleDrawingMode()" style="margin-bottom: 5px;">Route Zeichnen</button><br>
-    <button onclick="sendPlannedPath()" style="background-color: #e7e7e7; color: black; margin-bottom: 5px;">Pfad
-      Senden</button>
-    <button onclick="clearPlannedPath()" style="background-color: #e7e7e7; color: black; margin-bottom: 5px;">Pfad
-      Löschen</button>
-    <button onclick="sendEmptyPath()" style="background-color: #f44336; color: white; margin-bottom: 5px;">Stop (Leerer
-      Pfad)</button>
+    <h3>Create trajectory:</h3>
+    <button id="btn-draw-path" onclick="toggleDrawingMode()" style="margin-bottom: 5px;">Draw route</button><br>
+    <button onclick="sendPlannedPath()" style="background-color: #e7e7e7; color: black; margin-bottom: 5px;">Send
+      path</button>
+    <button onclick="clearPlannedPath()" style="background-color: #e7e7e7; color: black; margin-bottom: 5px;">Clear
+      path</button>
+    <button onclick="sendEmptyPath()" style="background-color: #f44336; color: white; margin-bottom: 5px;">Stop (send
+      empty path)</button>
 
     <hr>
 
@@ -218,7 +184,7 @@
 
   <script type="text/javascript">
 
-    // === 1. ROS-Verbindung aufbauen ===
+    // === 1. ROS-Connection ===
     var rosbridgeHost = window.location.hostname;
     var ros = new ROSLIB.Ros({
       url: 'ws://' + rosbridgeHost + ':9090'
@@ -226,20 +192,20 @@
 
     ros.on('connection', function () {
       console.log('Verbunden mit ROS-WebSocket-Server.');
-      document.getElementById('status').innerHTML = '<span style="color: green;">Verbunden</span>';
+      document.getElementById('status').innerHTML = '<span style="color: green;">Connected</span>';
     });
 
     ros.on('error', function (error) {
       console.log('Fehler bei der Verbindung: ', error);
-      document.getElementById('status').innerHTML = '<span style="color: red;">Fehler!</span>';
+      document.getElementById('status').innerHTML = '<span style="color: red;">Error!</span>';
     });
 
     ros.on('close', function () {
       console.log('Verbindung getrennt.');
-      document.getElementById('status').innerHTML = '<span style="color: orange;">Getrennt</span>';
+      document.getElementById('status').innerHTML = '<span style="color: orange;">Disconnected</span>';
     });
 
-    // === 2. Karteninitialisierung ===
+    // === 2. Map initialization ===
     const INITIAL_LAT = 48.4011;
     const INITIAL_LON = 9.9877;
     const INITIAL_ZOOM = 18;
@@ -250,31 +216,26 @@
       maxZoom: 50
     }).addTo(map);
 
-    // === Icon für den Roboter erstellen (MODIFIZIERT) ===
-
-    // Wir benutzen L.divIcon. Leaflet positioniert den 'robot-div-icon'-Container.
-    // Wir rotieren nur das 'robot-icon'-Bild *innerhalb* dieses Containers.
+    // === Icon for robot (rovo) ===
     var robotMarker = L.marker([INITIAL_LAT, INITIAL_LON], {
       icon: L.divIcon({
-        className: 'robot-div-icon', // Klasse für den äußeren Container
-        html: '<img src="RovoIcon.png" class="robot-icon">', // Unser Bild im Container
+        className: 'robot-div-icon',
+        html: '<img src="RovoIcon.png" class="robot-icon">',
         iconSize: [32, 32],
         iconAnchor: [16, 16]
       })
     }).addTo(map);
 
-    // Greife auf das Bild-Element zu, das wir rotieren wollen
     var robotIconImg = robotMarker._icon.querySelector('.robot-icon');
     var currentHeading = 0;
     var currentLat = 0;
     var currentLon = 0;
-    // Globale Variablen für Metrische Position (für Trajektorien-Start)
     var currentOdomX = 0.0;
     var currentOdomY = 0.0;
 
-    // === 3. ROS-Topics abonnieren ===
+    // === 3. ROS-Topics subscription ===
 
-    // 3.0 Global Odometry Subscriber (NEU)
+    // 3.0 Global Odometry Subscriber
     var odomTopic = new ROSLIB.Topic({
       ros: ros,
       name: '/odometry/filtered',
@@ -310,7 +271,7 @@
       document.getElementById('val_odom_heading').innerHTML = displayHeading.toFixed(1);
     });
 
-    // 3.1 IMU-Daten (Orientierung)
+    // 3.1 IMU-Data (Orientation)
     var imuTopic = new ROSLIB.Topic({
       ros: ros,
       name: '/imu/data',
@@ -336,11 +297,6 @@
       currentHeading = displayHeading;
 
       if (robotIconImg) {
-        // In Leaflet, rotation is usually clockwise. 
-        // 0 degrees corresponds to pointing North but visually rotating it requires offsetting.
-        // Assuming your icon points North natively:
-        // Math: ENU sets East=0. But map is North=Up. North in ENU is 90 deg.
-        // Icon rotation needed (clockwise) = 90 - heading. 
         robotIconImg.style.transform = `rotate(${90 - currentHeading}deg)`;
       }
       document.getElementById('BNO085-absolute-heading').innerHTML = currentHeading.toFixed(1);
@@ -352,7 +308,7 @@
     // Variable to track if we have zoomed to the first received position
     var initialPositionSet = false;
 
-    // 3.2 GPS-Daten (Position)
+    // 3.2 GPS-Data (position)
     var gpsTopic = new ROSLIB.Topic({
       ros: ros,
       name: '/ublox_gps_node/fix',
@@ -363,7 +319,7 @@
       currentLon = message.longitude;
       robotMarker.setLatLng([currentLat, currentLon]);
 
-      // Zentriere die Karte beim ersten gültigen Positions-Update auf den Roboter
+      // Center the map on the first valid position update
       if (!initialPositionSet && currentLat !== 0 && currentLon !== 0) {
         map.setView([currentLat, currentLon], 19);
         initialPositionSet = true;
@@ -385,7 +341,7 @@
       document.getElementById('ZED-F9P-status').innerHTML = `<span style="color: ${color};">${statusText}</span>`;
     });
 
-    // === 4. BNO085 Kalibrierungs-Status ===
+    // === 4. BNO085 calibration status ===
     var calibTopic = new ROSLIB.Topic({
       ros: ros,
       name: '/imu/calibration_status',
@@ -394,7 +350,7 @@
     calibTopic.subscribe(function (message) {
       var calibValue = message.data;
       var statusText = 'Unknown';
-      // message.data ist bei std_msgs/Int8 ein Number
+
       switch (calibValue) {
         case 0: statusText = '<span style="color: red;">Unreliable (0)</span>'; break;
         case 1: statusText = '<span style="color: orange;">Low Acc (1)</span>'; break;
@@ -405,7 +361,7 @@
       document.getElementById('BNO085-status').innerHTML = statusText;
     });
 
-    // === 5. RTK Fix Mode Status (mit ublox_msgs) ===
+    // === 5. RTK Fix Mode Status (with ublox_msgs) ===
     var navPvtTopic = new ROSLIB.Topic({
       ros: ros,
       name: '/ublox_gps_node/navpvt',
@@ -413,8 +369,6 @@
     });
     navPvtTopic.subscribe(function (message) {
       var fixType = message.fix_type;
-      // var flags = message.flags;
-      // var flags2 = message.flags2;
       var statusText = 'Unknown';
       var color = 'black';
 
@@ -429,67 +383,15 @@
       }
 
       document.getElementById('ZED-F9P_fix-type').innerHTML = `<span style="color: ${color};">${statusText}</span>`;
-      // document.getElementById('ZED-F9P_flags').innerHTML = flags.toString();
-      // document.getElementById('ZED-F9P_flags2').innerHTML = flags2.toString();
     });
 
-    // // === Richtungen aus zed-f9p berechnen ===
-    // var navPvtTopic = new ROSLIB.Topic({
+    // for Testing
+    // === 6. Command subscription ===
+    // var cmdTopic = new ROSLIB.Topic({
     //   ros: ros,
-    //   name: '/ublox_gps_node/navpvt',
-    //   messageType: 'ublox_msgs/NavPVT'
+    //   name: '/web_command',
+    //   messageType: 'std_msgs/String'
     // });
-    // navPvtTopic.subscribe(function (message) {
-    //   // --- BERECHNUNGEN ---
-
-    //   // 1. Heading & Genauigkeit (Rohwert ist 1e-5 Grad)
-    //   var headingDeg = (message.heading / 100000.0).toFixed(2);
-    //   var headAccDeg = (message.head_acc / 100000.0).toFixed(2);
-
-    //   // 2. Geschwindigkeiten (Rohwert ist mm/s -> durch 1000 teilen für m/s)
-    //   var velN = message.vel_n / 1000.0;
-    //   var velE = message.vel_e / 1000.0;
-    //   var velD = message.vel_d / 1000.0;
-    //   var speedG = (message.g_speed / 1000.0).toFixed(3); // Absolute Ground Speed
-
-    //   // 3. Heading aus Vektoren berechnen (atan2 von Ost/Nord)
-    //   // Ergibt Radiant, umrechnen in Grad.
-    //   var headingRad = Math.atan2(velE, velN);
-    //   var headingCalc = headingRad * (180.0 / Math.PI);
-
-    //   // Wenn Wert negativ (z.B. -90 für West), in 0-360 Format umwandeln
-    //   if (headingCalc < 0) {
-    //     headingCalc += 360;
-    //   }
-
-    //   // --- UPDATE DER DIVS (IDS) ---
-
-    //   // Richtung
-    //   document.getElementById('ZED-F9P_heading').innerText = headingDeg;
-    //   document.getElementById('ZED-F9P_heading_acc').innerText = headAccDeg;
-    //   document.getElementById('ZED-F9P_heading_calc').innerText = headingCalc.toFixed(2);
-
-    //   // Geschwindigkeit
-    //   document.getElementById('ZED-F9P_speed_g').innerText = speedG;
-    //   document.getElementById('ZED-F9P_vel_n').innerText = velN.toFixed(3);
-    //   document.getElementById('ZED-F9P_vel_e').innerText = velE.toFixed(3);
-    //   document.getElementById('ZED-F9P_vel_d').innerText = velD.toFixed(3);
-    // });
-
-    // === 6. Befehle senden (Button-Klick) ===
-    var cmdTopic = new ROSLIB.Topic({
-      ros: ros,
-      name: '/web_command',
-      messageType: 'std_msgs/String'
-    });
-
-    // function sendCommand(commandName) {
-    //   var msg = new ROSLIB.Message({
-    //     data: commandName
-    //   });
-    //   console.log('Sende Befehl: ' + msg.data);
-    //   cmdTopic.publish(msg);
-    // }
 
     // === 7. Mode Control & Heartbeat ===
     var setModeTopic = new ROSLIB.Topic({
@@ -538,8 +440,6 @@
       setModeTopic.publish(msg);
       console.log("Set mode to: " + newMode);
 
-      // Heartbeat wird durch den modeTopic callback gesteuert, 
-      // aber wir können es auch hier direkt triggern für schnelleres Feedback
       if (newMode === 2) {
         startHeartbeat();
       } else {
@@ -547,26 +447,27 @@
       }
     }
 
-    // === 8. Speed Control ===
-    var speedTopic = new ROSLIB.Topic({
-      ros: ros,
-      name: '/rovo/set_speed',
-      messageType: 'geometry_msgs/Twist'
-    });
+    // === 8. Speed Control - only for testing ===
+    // var speedTopic = new ROSLIB.Topic({
+    //   ros: ros,
+    //   name: '/rovo/set_speed',
+    //   messageType: 'geometry_msgs/Twist'
+    // });
 
-    function sendSpeed() {
-      var linX = parseFloat(document.getElementById('input_linear_x').value) || 0.0;
-      var angZ = parseFloat(document.getElementById('input_angular_z').value) || 0.0;
 
-      // Twist Message
-      var twistMsg = new ROSLIB.Message({
-        linear: { x: linX, y: 0.0, z: 0.0 },
-        angular: { x: 0.0, y: 0.0, z: angZ }
-      });
+    // function sendSpeed() {
+    //   var linX = parseFloat(document.getElementById('input_linear_x').value) || 0.0;
+    //   var angZ = parseFloat(document.getElementById('input_angular_z').value) || 0.0;
 
-      console.log("Sende Speed: Lin=" + linX + " Ang=" + angZ);
-      speedTopic.publish(twistMsg);
-    }
+    //   // Twist Message
+    //   var twistMsg = new ROSLIB.Message({
+    //     linear: { x: linX, y: 0.0, z: 0.0 },
+    //     angular: { x: 0.0, y: 0.0, z: angZ }
+    //   });
+
+    //   console.log("Sende Speed: Lin=" + linX + " Ang=" + angZ);
+    //   speedTopic.publish(twistMsg);
+    // }
 
     function startHeartbeat() {
       if (!isWatchdogActive) {
@@ -768,7 +669,7 @@
     }
 
     function sendPlannedPath() {
-      // Wenn keine Punkte gezeichnet wurden, sende einen leeren Pfad um den Roboter zu stoppen
+      //If no points are drawn, send an empty path to stop the robot
       if (plannedPathPoints.length < 1) {
         var emptyPathMsg = new ROSLIB.Message({
           header: {
@@ -777,12 +678,12 @@
           },
           poses: []
         });
-        console.log("Sende leeren Pfad.");
+        console.log("Send empty path to stop the robot.");
         plannedPathTopic.publish(emptyPathMsg);
         return;
       }
 
-      console.log("Sende geplanten Pfad mit " + plannedPathPoints.length + " Punkten.");
+      console.log("Send planned path with " + plannedPathPoints.length + " waypoints.");
 
       var pathMsg = new ROSLIB.Message({
         header: {
@@ -809,16 +710,15 @@
         pathMsg.poses.push(pose);
       }
 
-      console.log("Interpolierter Pfad fertig: " + pathMsg.poses.length + " Wegpunkte gesendet.");
+      console.log("Interpolated path ready: " + pathMsg.poses.length + " waypoints sent.");
 
       plannedPathTopic.publish(pathMsg);
 
-      // Optional: Zeichnen Modus beenden nach senden
       if (isDrawingPath) toggleDrawingMode();
     }
 
-    // === 11. ROS Logger (rosout) abonnieren ===
-    // Alle Python log-Befehle (self.get_logger().info) werden automatisch auf /rosout gespiegelt.
+    // === 11. ROS Logger (rosout) subscription ===
+    // All Python log messages (self.get_logger().info) are automatically mirrored to /rosout.
     var rosoutTopic = new ROSLIB.Topic({
       ros: ros,
       name: '/rosout',
@@ -828,11 +728,10 @@
     var logContainer = document.getElementById('rovo-logs');
 
     rosoutTopic.subscribe(function (message) {
-      // Alle Nachrichten (jeder Node) anzeigen
       var logLevel = "UNKNOWN";
       var color = "black";
 
-      // Level von rcl_interfaces/msg/Log:
+      // Level from rcl_interfaces/msg/Log:
       // 10: DEBUG, 20: INFO, 30: WARN, 40: ERROR, 50: FATAL
       switch (message.level) {
         case 10: logLevel = "DEBUG"; color = "gray"; break;
@@ -846,7 +745,7 @@
       logEntry.style.color = color;
       logEntry.style.marginBottom = "2px";
 
-      // Füge Zeitstempel hinzu (optional)
+      // timestamp
       var date = new Date((message.stamp.sec * 1000) + (message.stamp.nanosec / 1000000));
       var timeStr = date.toLocaleTimeString('de-DE', { hour12: false }) + "." + String(date.getMilliseconds()).padStart(3, '0');
 
@@ -854,12 +753,12 @@
 
       logContainer.appendChild(logEntry);
 
-      // Damit nicht zu viele Einträge den Browser verlangsamen (max. 100 Einträge)
+      // Limit to 100 entries
       if (logContainer.childNodes.length > 100) {
         logContainer.removeChild(logContainer.firstChild);
       }
 
-      // Auto-Scroll nach unten
+      // Auto-Scroll
       logContainer.scrollTop = logContainer.scrollHeight;
     });
 
