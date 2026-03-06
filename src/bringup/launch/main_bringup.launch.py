@@ -4,20 +4,17 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import IncludeLaunchDescription
 
-# === KORRIGIERTE IMPORTE ===
-# PythonLaunchDescriptionSource für .py-Dateien (wie ublox_gps)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-# XMLLaunchDescriptionSource für .xml-Dateien (wie rosbridge)
 from launch_xml.launch_description_sources import XMLLaunchDescriptionSource
 
 def generate_launch_description():
 
-    # === 1. Pfade zu den Paketen finden ===
+    # === 1. Find path to packages ===
     rosbridge_pkg_share = get_package_share_directory('rosbridge_server')
     ublox_gps_pkg_share = get_package_share_directory('ublox_gps') 
     ntrip_client_pkg_share = get_package_share_directory('ntrip_client')
 
-    # === 2. Nodes definieren ===
+    # === 2. Define nodes ===
     bno085_node = Node(
         package='bno085',
         executable='bno085_node',
@@ -41,9 +38,6 @@ def generate_launch_description():
         XMLLaunchDescriptionSource(
             os.path.join(rosbridge_pkg_share, 'launch', 'rosbridge_websocket_launch.xml')
         ),
-        # === HIER DIE LÖSUNG ===
-        # Wir zwingen rosbridge, Port 9090 zu verwenden, 
-        # um die Kollision mit dem 'port'-Argument (2101) des ntrip_client zu verhindern.
         launch_arguments={'port': '9090', 'delay_between_messages': '0.0'}.items()
     )
 
@@ -74,7 +68,6 @@ def generate_launch_description():
         )
     )
 
-    # CSV logger node (logs GPS / Pose to CSV files)
     csv_logger_node = Node(
         package='csv_logger',
         executable='csv_logger_node',
@@ -93,13 +86,12 @@ def generate_launch_description():
         output='screen'
     )
 
-    # === 4. Alle Aktionen zusammenfassen ===
+    # === 4. Summarize all actions ===
     return LaunchDescription([
         ntrip_client_launch,
         rosbridge_launch,
         ublox_gps_launch,
         localization_launch,
-        #nav2_launch,
         bno085_node,
         rovo_driver_node,
         web_ui_node,

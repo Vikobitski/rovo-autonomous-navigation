@@ -5,12 +5,9 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     
-    # ---------------------------------------------------------
-    # WICHTIG: Ändere 'my_robot_nav' zu deinem echten Paketnamen!
-    # ---------------------------------------------------------
     pkg_name = 'bringup'
     
-    # Pfad zur YAML-Konfigurationsdatei
+    # Path to the YAML configuration file
     config_dir = os.path.join(
         get_package_share_directory(pkg_name), 
         'config', 
@@ -18,25 +15,21 @@ def generate_launch_description():
     )
 
     # ==========================================
-    # 1. DER EKF KNOTEN (Der Filter)
+    # 1. THE EKF NODE (The Filter)
     # ==========================================
-    # Fusioniert die umgerechneten GPS-Daten und deinen Kompass (Yaw)
+    # Fuses the converted GPS data and your compass (Yaw)
     ekf_node = Node(
         package='robot_localization',
         executable='ekf_node',
         name='ekf_filter_node',
         output='screen',
         parameters=[config_dir],
-        # remappings=[
-        #     # Wir benennen das Standard-Topic um, damit es eindeutiger ist
-        #     ('/odometry/filtered', '/odometry/global')
-        # ]
     )
 
     # ==========================================
-    # 2. DER NAVSAT TRANSFORM KNOTEN
+    # 2. THE NAVSAT TRANSFORM NODE
     # ==========================================
-    # Wandelt Längen-/Breitengrad in metrische X/Y-Koordinaten um
+    # Converts longitude/latitude to metric X/Y coordinates
     navsat_node = Node(
         package='robot_localization',
         executable='navsat_transform_node',
@@ -44,20 +37,16 @@ def generate_launch_description():
         output='screen',
         parameters=[config_dir],
         remappings=[
-            # Hier binden wir dein spezifisches RTK-Topic ein!
             ('/gps/fix', '/ublox_gps_node/fix'), 
-            
-            # Falls dein BNO085 auf einem anderen Topic sendet, hier anpassen:
             ('/imu', '/imu/data'),               
         ]
     )
 
-# ==========================================
-    # 3. STATISCHE TRANSFORMATIONEN (TF2) - JAZZY STYLE
+    # ==========================================
+    # 3. STATIC TRANSFORMATIONS (TF2)
     # ==========================================
     
     # BNO085 Transformation
-    # WICHTIG: child-frame-id auf 'imu' geändert (statt 'imu_link')
     tf_imu = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -70,7 +59,6 @@ def generate_launch_description():
     )
 
     # u-blox RTK Transformation
-    # WICHTIG: child-frame-id auf 'gps' geändert (statt 'gps_link')
     tf_gps = Node(
         package='tf2_ros',
         executable='static_transform_publisher',

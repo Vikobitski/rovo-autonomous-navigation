@@ -24,5 +24,4 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>launch_xml</exec_depend>
 
-  <!-- <depend>ubx_msgs</depend> -->
 </package>
