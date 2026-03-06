@@ -47,11 +47,6 @@ class TrajectoryFollower(Node):
     def odom_cb(self, msg):
         self.x_est = msg.pose.pose.position.x
         self.y_est = msg.pose.pose.position.y
-
-        # var siny_cosp = 2 * (q.w * q.z + q.x * q.y);
-        # var cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
-
-        # var yawRad = Math.atan2(siny_cosp, cosy_cosp);
         
         # Quaternion to Yaw calculation
         q = msg.pose.pose.orientation
