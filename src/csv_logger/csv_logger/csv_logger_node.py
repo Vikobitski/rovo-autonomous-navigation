@@ -81,9 +81,9 @@ class CSVLoggerNode(Node):
             writer.writerow([
                 'timestamp', 'seconds', 'latitude', 'longitude', 
                 'altitude', 'position_covariance_type', 'RTK-status',
-                'BNO085-absolute-heading','BNO085-quaternion' , 'BNO085-angular-velocity', 'BNO085-linear-acceleration',
+                'BNO085-quaternion', 'BNO085-angular-velocity', 'BNO085-linear-acceleration',
                 'BNO085-calibration-status',
-                'odom_x', 'odom_y', 'odom_heading', 'odom_quat_w', 'odom_quat_x', 'odom_quat_y', 'odom_quat_z'
+                'odom_x', 'odom_y', 'odom_quat_w', 'odom_quat_x', 'odom_quat_y', 'odom_quat_z'
             ])
 
         # header counts as one line
@@ -182,17 +182,13 @@ class CSVLoggerNode(Node):
             seconds = self.get_clock().now().nanoseconds / 1e9
             
             # Prepare BNO085 data
-            bno_heading = ""
             bno_quat = ""
             bno_ang_vel = ""
             bno_lin_acc = ""
             bno_calib = ""
             
             if self.latest_imu_msg:
-                # Calculate heading (Yaw)
                 q = self.latest_imu_msg.orientation
-                yaw = self._get_yaw_from_quaternion(q)
-                bno_heading = f"{yaw:.4f}"
                 bno_quat = f"[{q.x:.4f}, {q.y:.4f}, {q.z:.4f}, {q.w:.4f}]"
                 
                 av = self.latest_imu_msg.angular_velocity
@@ -207,7 +203,6 @@ class CSVLoggerNode(Node):
             # Prepare Odometry data
             odom_x = ""
             odom_y = ""
-            odom_heading = ""
             odom_qw = ""
             odom_qx = ""
             odom_qy = ""
@@ -223,10 +218,6 @@ class CSVLoggerNode(Node):
                 odom_qx = f"{ori.x:.4f}"
                 odom_qy = f"{ori.y:.4f}"
                 odom_qz = f"{ori.z:.4f}"
-                
-                # reusing _get_yaw_from_quaternion for heading in degrees
-                heading_deg = self._get_yaw_from_quaternion(ori)
-                odom_heading = f"{heading_deg:.4f}"
 
 
             with open(self.gps_csv_path, 'a', newline='') as f:
@@ -239,14 +230,12 @@ class CSVLoggerNode(Node):
                     f'{msg.altitude:.3f}',
                     msg.position_covariance_type,
                     msg.status.status,
-                    bno_heading,
                     bno_quat,
                     bno_ang_vel,
                     bno_lin_acc,
                     bno_calib,
                     odom_x,
                     odom_y,
-                    odom_heading,
                     odom_qw,
                     odom_qx,
                     odom_qy,
@@ -268,26 +257,6 @@ class CSVLoggerNode(Node):
     def _odom_callback(self, msg: Odometry):
         """Store the latest odometry message"""
         self.latest_odom_msg = msg
-
-    def _get_yaw_from_quaternion(self, q):
-        """
-        Convert quaternion (x, y, z, w) to heading in degrees (0-360).
-        """
-        # standard conversion from quaternion to euler roll, pitch, yaw
-        t0 = +2.0 * (q.w * q.z + q.x * q.y)
-        t1 = +1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        yaw_rad = math.atan2(t0, t1)
-        
-        yaw_deg = math.degrees(yaw_rad)
-        
-        # Calculate display heading based on JS logic
-        # let displayHeading = (90 - yawDeg);
-        display_heading = 90.0 - yaw_deg
-        
-        # displayHeading = (displayHeading + 360) % 360;
-        display_heading = (display_heading + 360.0) % 360.0
-        
-        return display_heading
 
 def main(args=None):
     rclpy.init(args=args)
