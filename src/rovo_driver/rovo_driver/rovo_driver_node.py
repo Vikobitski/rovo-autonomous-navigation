@@ -275,14 +275,11 @@ class RovoDriverNode(Node):
             if not self.wait_for_response(0x20A, 0x02, 0x02):
                 raise Exception("Step 6.2 failed")
             
-            # Send Success Diagnostic
             self.get_logger().info("External control activated")
-            #self.publish_diagnostic(DiagnosticStatus.OK, "External control activated successfully")
             return True
             
         except Exception as e:
             self.get_logger().error(f"External control activation failed: {e}")
-            #self.publish_diagnostic(DiagnosticStatus.ERROR, f"External control activation failed: {e}")
             return False
 
     def publish_diagnostic(self, level, message):
@@ -334,16 +331,13 @@ class RovoDriverNode(Node):
         requested_mode = msg.data
         
         if RovoMode(requested_mode) == RovoMode.MANUAL: # Manual request
-            #if self.mode != RovoMode.MANUAL:
-                self.enter_manual_mode()
+            self.enter_manual_mode()
                 
         elif RovoMode(requested_mode) == RovoMode.AUTOMATIC: # Automatic request
-            #if self.mode != RovoMode.AUTOMATIC:
-                self.enter_automatic_mode()
+            self.enter_automatic_mode()
 
         elif RovoMode(requested_mode) == RovoMode.AUTOMATIC_WATCHDOG: # Automatic Watchdog request
-            #if self.mode != RovoMode.AUTOMATIC_WATCHDOG:
-                self.enter_automatic_watchdog_mode()
+            self.enter_automatic_watchdog_mode()
 
         else:
             self.get_logger().warn(f"Unknown mode requested: {requested_mode}")
@@ -367,11 +361,6 @@ class RovoDriverNode(Node):
             self.get_logger().error("Failed to activate external control --> GEAR not 0?")
             self.enter_manual_mode()
             return
-
-        # self.mode = RovoMode.AUTOMATIC
-        # rovo_status_msg = Int32()
-        # rovo_status_msg.data = RovoMode.AUTOMATIC.value
-        # self.mode_publisher.publish(rovo_status_msg)
         
         # Initialize speed mode command
         self.set_cyclic_message(0x18A, [0x02, 0x02, 0x00])  # Speed mode command
@@ -409,10 +398,8 @@ class RovoDriverNode(Node):
         """Switch to manual mode"""
         self.watchdog_timer.cancel() # Stop watchdog if running
         self.set_cyclic_message(0x28A, [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0]) # reset speed outputs
-        #time.sleep(1)
         self.set_cyclic_message(0x18A, [0x00, 0x00, 0x00])  # Deactivate external control
         self.get_logger().info("Deactivated external control")
-        #self.publish_diagnostic(DiagnosticStatus.OK, "External control deactivated")
         self.mode = RovoMode.MANUAL
         
         mode_msg = Int32()
@@ -428,9 +415,6 @@ class RovoDriverNode(Node):
         """
         linear_velocity = msg.linear.x
         angular_velocity = msg.angular.z
-
-        # left_velocity = linear_velocity + (self.wheelbase * angular_velocity / 2)
-        # right_velocity = linear_velocity - (self.wheelbase * angular_velocity / 2)
 
         right_velocity = linear_velocity + (self.wheelbase * angular_velocity / 2)
         left_velocity = linear_velocity - (self.wheelbase * angular_velocity / 2)
@@ -462,7 +446,6 @@ class RovoDriverNode(Node):
             (right_rpm >> 8) & 0xFF,    # Byte6
             self.alive_counter & 0xFF   # Byte7 (Alive)
         ]
-        #self.get_logger().info(f"Sending can speed message left_rpm: {left_rpm}, right_rpm: {right_rpm} ")
         # Send
         self.set_cyclic_message(0x28A, data)
 
