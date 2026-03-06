@@ -4,18 +4,12 @@ This repository contains the ROS 2 based software stack for the mobile robot [RO
 
 ## Core Features
 
-- **Hardware Interface (`rovo_driver`)**: Seamless CAN bus communication, Xbox controller integration, and a robust mode system (Manual, Automatic, Automatic Watchdog for safe operation).
-- **Localization & Sensors**: High-precision positioning using RTK-GPS (u-blox ZED-F9P) and IMU data fusion (BNO085) via Nav2 and Robot Localization.
+- **Hardware Interface (`rovo_driver`)**: CAN bus communication and a robust mode system (Manual, Automatic, Automatic Watchdog for safe operation).
+- **Localization & Sensors**: positioning using RTK-GPS (u-blox ZED-F9P) and IMU data fusion (BNO085) via Robot Localization.
 - **Trajectory Following & Autonomous Navigation (`trajectory_control`)**: Path planning and precise following of GPS waypoints in the local coordinate system.
 - **Interactive Web UI**: A browser-based frontend featuring a live map (Leaflet), click-to-draw route creation, live telemetry visualization (current position, heading, operating mode), and remote control elements.
 
 ---
-
-## Launching
-```bash
-source install/setup.bash
-ros2 launch bringup main_bringup.launch.py
-```
 
 ## Building
 Build entire workspace:
@@ -26,6 +20,12 @@ colcon build
 Build specific package:
 ```bash
 colcon build --packages-select <PACKAGE_NAME>
+```
+
+## Launching
+```bash
+source install/setup.bash
+ros2 launch bringup main_bringup.launch.py
 ```
 
 ## Useful Tutorials
