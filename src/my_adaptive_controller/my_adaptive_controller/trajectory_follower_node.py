@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 import numpy as np
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, PoseStamped
 from nav_msgs.msg import Odometry, Path
 from robot_localization.srv import FromLL
 from geographic_msgs.msg import GeoPoint
@@ -37,6 +37,7 @@ class TrajectoryFollower(Node):
         self.create_subscription(Odometry, '/odometry/filtered', self.odom_cb, 10)
         self.create_subscription(Path, '/set_trajectory', self.path_cb, 10, callback_group=self.cb_group)
         self.cmd_pub = self.create_publisher(Twist, '/rovo/set_speed', 10)
+        self.map_path_pub = self.create_publisher(Path, '/planned_trajectory_map', 10)
 
         # 6. SRV CLIENTS
         self.from_ll_client = self.create_client(FromLL, '/fromLL', callback_group=self.cb_group)
@@ -133,6 +134,20 @@ class TrajectoryFollower(Node):
 
             self.path = np.array(interpolated_path)
             self.path_received = True
+            
+            # Publish Map Path for Logging/Visualization
+            map_path_msg = Path()
+            map_path_msg.header.stamp = self.get_clock().now().to_msg()
+            map_path_msg.header.frame_id = 'map'
+            for pt in interpolated_path:
+                pose = PoseStamped()
+                pose.header = map_path_msg.header
+                pose.pose.position.x = float(pt[0])
+                pose.pose.position.y = float(pt[1])
+                pose.pose.position.z = 0.0
+                map_path_msg.poses.append(pose)
+            
+            self.map_path_pub.publish(map_path_msg)
             
             # Reset controller state for new path
             self.nav.finished = False 

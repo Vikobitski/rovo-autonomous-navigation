@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, Imu
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, Path
 from std_msgs.msg import Int8
 import math
 import csv
@@ -69,6 +69,16 @@ class CSVLoggerNode(Node):
                 Odometry, '/odometry/filtered', self._odom_callback, 10
             )
             self.latest_odom_msg = None
+            
+        # Subscribe to Trajectory Path
+        self.path_sub = self.create_subscription(
+            Path, '/set_trajectory', self._path_callback, 10
+        )
+        
+        # Subscribe to Map Trajectory Path
+        self.map_path_sub = self.create_subscription(
+            Path, '/planned_trajectory_map', self._map_path_callback, 10
+        )
         
         self.get_logger().info('CSV Logger started')
         if self.log_gps:
@@ -257,6 +267,109 @@ class CSVLoggerNode(Node):
     def _odom_callback(self, msg: Odometry):
         """Store the latest odometry message"""
         self.latest_odom_msg = msg
+
+    def _path_callback(self, msg: Path):
+        """Handle incoming Path messages (planned trajectory)"""
+        try:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            traj_csv_path = os.path.join(self.output_dir, f'trajectory_log_{timestamp}.csv')
+            
+            with open(traj_csv_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['seq', 'timestamp_sec', 'timestamp_nanosec', 'frame_id', 'latitude/x', 'longitude/y', 'altitude/z'])
+                
+                for i, pose_stamped in enumerate(msg.poses):
+                    # We log x, y, z which typically contain lat, lon, alt from the UI
+                    writer.writerow([
+                        i,
+                        pose_stamped.header.stamp.sec,
+                        pose_stamped.header.stamp.nanosec,
+                        pose_stamped.header.frame_id,
+                        f'{pose_stamped.pose.position.x:.8f}',
+                        f'{pose_stamped.pose.position.y:.8f}',
+                        f'{pose_stamped.pose.position.z:.8f}'
+                    ])
+                    
+            self.get_logger().info(f'Logged trajectory with {len(msg.poses)} points to {traj_csv_path}')
+            
+            # Enforce max trajectory files
+            self._enforce_max_traj_files()
+            
+        except Exception as e:
+            self.get_logger().error(f'Error writing trajectory data: {e}')
+
+    def _enforce_max_traj_files(self):
+        pattern = os.path.join(self.output_dir, 'trajectory_log_*.csv')
+        files = glob.glob(pattern)
+        regex = re.compile(r'trajectory_log_(\d{8}_\d{6})\.csv$')
+        parsed = []
+        for f in files:
+            m = regex.search(os.path.basename(f))
+            if m:
+                try:
+                    ts = dt.strptime(m.group(1), '%Y%m%d_%H%M%S')
+                    parsed.append((ts, f))
+                except Exception:
+                    continue
+        parsed.sort()
+        while len(parsed) > self.max_files:
+            old_ts, old_file = parsed.pop(0)
+            try:
+                os.remove(old_file)
+                self.get_logger().info(f'Removed old trajectory log: {old_file}')
+            except Exception as e:
+                self.get_logger().warn(f'Could not remove old log {old_file}: {e}')
+
+    def _map_path_callback(self, msg: Path):
+        """Handle incoming converted Map Path messages"""
+        try:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            traj_csv_path = os.path.join(self.output_dir, f'map_trajectory_log_{timestamp}.csv')
+            
+            with open(traj_csv_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['seq', 'timestamp_sec', 'timestamp_nanosec', 'frame_id', 'x', 'y', 'z'])
+                
+                for i, pose_stamped in enumerate(msg.poses):
+                    writer.writerow([
+                        i,
+                        pose_stamped.header.stamp.sec,
+                        pose_stamped.header.stamp.nanosec,
+                        pose_stamped.header.frame_id,
+                        f'{pose_stamped.pose.position.x:.8f}',
+                        f'{pose_stamped.pose.position.y:.8f}',
+                        f'{pose_stamped.pose.position.z:.8f}'
+                    ])
+                    
+            self.get_logger().info(f'Logged map trajectory with {len(msg.poses)} points to {traj_csv_path}')
+            
+            # Enforce max trajectory files
+            self._enforce_max_map_traj_files()
+            
+        except Exception as e:
+            self.get_logger().error(f'Error writing map trajectory data: {e}')
+
+    def _enforce_max_map_traj_files(self):
+        pattern = os.path.join(self.output_dir, 'map_trajectory_log_*.csv')
+        files = glob.glob(pattern)
+        regex = re.compile(r'map_trajectory_log_(\d{8}_\d{6})\.csv$')
+        parsed = []
+        for f in files:
+            m = regex.search(os.path.basename(f))
+            if m:
+                try:
+                    ts = dt.strptime(m.group(1), '%Y%m%d_%H%M%S')
+                    parsed.append((ts, f))
+                except Exception:
+                    continue
+        parsed.sort()
+        while len(parsed) > self.max_files:
+            old_ts, old_file = parsed.pop(0)
+            try:
+                os.remove(old_file)
+                self.get_logger().info(f'Removed old map trajectory log: {old_file}')
+            except Exception as e:
+                self.get_logger().warn(f'Could not remove old log {old_file}: {e}')
 
 def main(args=None):
     rclpy.init(args=args)
