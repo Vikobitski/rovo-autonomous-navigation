@@ -16,11 +16,11 @@ from adafruit_bno08x import (
 
 class Bno085Node(Node):
     """
-    ROS 2 Wrapper für den BNO085 Sensor.
-    Liest die fusionierte Quaternion (Rotation Vector), Beschleunigung
-    und Gyroskop-Daten und veröffentlicht sie als sensor_msgs/Imu.
+    ROS 2 Wrapper for the BNO085 sensor.
+    Reads the fused quaternion (Rotation Vector), acceleration
+    and gyroscope data and publishes them as sensor_msgs/Imu.
     
-    Veröffentlicht außerdem den Kalibrierungsstatus auf /imu/calibration_status.
+    Also publishes the calibration status on /imu/calibration_status.
     """
     def __init__(self):
         super().__init__('bno085_node')
@@ -32,13 +32,13 @@ class Bno085Node(Node):
         self.declare_parameter('yaw_offset_deg', 0.0)
         self.yaw_offset_deg = self.get_parameter('yaw_offset_deg').value
         
-        # --- Hardware-Initialisation ---
+        # --- Hardware Initialization ---
         try:
             self.i2c = busio.I2C(board.SCL, board.SDA, frequency=400000)
             self.bno = BNO08X_I2C(self.i2c)
         except Exception as e:
-            self.get_logger().fatal(f"Konnte BNO085 nicht initialisieren: {e}")
-            self.get_logger().fatal("Stelle sicher, dass I2C aktiviert ist und der Sensor verbunden ist.")
+            self.get_logger().fatal(f"Failed to initialize BNO085: {e}")
+            self.get_logger().fatal("Make sure I2C is enabled and the sensor is connected.")
             rclpy.shutdown()
             return
 
@@ -48,7 +48,7 @@ class Bno085Node(Node):
         self.bno.enable_feature(BNO_REPORT_GYROSCOPE)
         self.bno.enable_feature(BNO_REPORT_MAGNETOMETER)
         
-        self.get_logger().info("BNO085 Sensor initialisiert und Features aktiviert.")
+        self.get_logger().info("BNO085 sensor initialized and features activated.")
 
         # --- ROS Publisher & Timer ---
         self.imu_publisher = self.create_publisher(Imu, '/imu/data', 10)
@@ -59,7 +59,7 @@ class Bno085Node(Node):
 
     def timer_callback(self):
         """
-        Liest Sensordaten UND Kalibrierungsstatus und veröffentlicht beides.
+        Reads sensor data AND calibration status and publishes both.
         """
         current_time = self.get_clock().now().to_msg()
         
