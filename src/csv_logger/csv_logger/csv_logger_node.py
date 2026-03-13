@@ -3,6 +3,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, Imu
 from nav_msgs.msg import Odometry, Path
 from std_msgs.msg import Int8
+from geometry_msgs.msg import Twist
 import math
 import csv
 import os
@@ -70,6 +71,12 @@ class CSVLoggerNode(Node):
             )
             self.latest_odom_msg = None
             
+            # Subscribe to Rovo Speed
+            self.speed_sub = self.create_subscription(
+                Twist, '/rovo/speed', self._speed_callback, 10
+            )
+            self.latest_speed_msg = None
+            
         # Subscribe to Trajectory Path
         self.path_sub = self.create_subscription(
             Path, '/set_trajectory', self._path_callback, 10
@@ -93,7 +100,8 @@ class CSVLoggerNode(Node):
                 'altitude', 'position_covariance_type', 'RTK-status',
                 'BNO085-quaternion', 'BNO085-angular-velocity', 'BNO085-linear-acceleration',
                 'BNO085-calibration-status',
-                'odom_x', 'odom_y', 'odom_quat_w', 'odom_quat_x', 'odom_quat_y', 'odom_quat_z'
+                'odom_x', 'odom_y', 'odom_quat_w', 'odom_quat_x', 'odom_quat_y', 'odom_quat_z',
+                'rovo_speed_linear_x', 'rovo_speed_angular_z'
             ])
 
         # header counts as one line
@@ -229,6 +237,14 @@ class CSVLoggerNode(Node):
                 odom_qy = f"{ori.y:.4f}"
                 odom_qz = f"{ori.z:.4f}"
 
+            # Prepare Speed data
+            speed_lin = ""
+            speed_ang = ""
+
+            if self.latest_speed_msg:
+                speed_lin = f"{self.latest_speed_msg.linear.x:.4f}"
+                speed_ang = f"{self.latest_speed_msg.angular.z:.4f}"
+
 
             with open(self.gps_csv_path, 'a', newline='') as f:
                 writer = csv.writer(f)
@@ -249,7 +265,9 @@ class CSVLoggerNode(Node):
                     odom_qw,
                     odom_qx,
                     odom_qy,
-                    odom_qz
+                    odom_qz,
+                    speed_lin,
+                    speed_ang
                 ])
             # increment line counter
             self.current_lines += 1
@@ -267,6 +285,10 @@ class CSVLoggerNode(Node):
     def _odom_callback(self, msg: Odometry):
         """Store the latest odometry message"""
         self.latest_odom_msg = msg
+
+    def _speed_callback(self, msg: Twist):
+        """Store the latest speed message"""
+        self.latest_speed_msg = msg
 
     def _path_callback(self, msg: Path):
         """Handle incoming Path messages (planned trajectory)"""

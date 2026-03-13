@@ -124,6 +124,12 @@
     </div>
 
     <div class="data-section" style="margin-top: 20px;">
+      <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">Rovo Speed</h3>
+      <div><strong>Linear Vel:</strong> <span id="val_speed_linear">--</span> m/s</div>
+      <div><strong>Angular Vel:</strong> <span id="val_speed_angular">--</span> rad/s</div>
+    </div>
+
+    <div class="data-section" style="margin-top: 20px;">
       <h3 style="border-bottom: 1px solid #ccc; padding-bottom: 5px;">Rovo Logs</h3>
       <div id="rovo-logs"
         style="height: 120px; overflow-y: scroll; font-size: 11px; font-family: monospace; background: #f9f9f9; border: 1px solid #ccc; padding: 5px;">
@@ -269,6 +275,18 @@
       }
 
       document.getElementById('val_odom_heading').innerHTML = displayHeading.toFixed(1);
+    });
+    
+    // 3.0b Rovo Speed Subscriber
+    var speedTopic = new ROSLIB.Topic({
+      ros: ros,
+      name: '/rovo/speed',
+      messageType: 'geometry_msgs/Twist'
+    });
+
+    speedTopic.subscribe(function (message) {
+      document.getElementById('val_speed_linear').innerHTML = message.linear.x.toFixed(2);
+      document.getElementById('val_speed_angular').innerHTML = message.angular.z.toFixed(2);
     });
 
     // 3.1 IMU-Data (Orientation)
