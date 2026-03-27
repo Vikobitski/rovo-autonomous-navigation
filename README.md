@@ -59,3 +59,12 @@ ros2 launch bringup main_bringup.launch.py
 After the successful initialization of the system, the robot is fully ready for use. Open the following address in the web browser on your control PC to access the Web UI:
 
 **[http://rovo.local:8000/](http://rovo.local:8000/)**
+
+### 4. Defining and Executing a Trajectory
+To make the robot drive along a desired route, proceed as follows in the Web UI:
+
+1. **Enable Drawing Mode:** Activate the route planning mode in the right control panel.
+2. **Set Waypoints:** Click consecutively on the desired target coordinates on the interactive map. The system visually connects these points into a path.
+3. **Send Route to Robot:** Confirm the drawn route. The path is then transmitted to the robot's control system.
+4. **Start Driving:** Change the operation mode in the control panel to **AUTOMATIC** (or **AUTO WATCHDOG**). The robot immediately starts driving the trajectory autonomously.
+5. **Abort Drive:** To stop the robot, either click the stop button (clears the active route) or switch the operation mode back to **MANUAL**.
