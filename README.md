@@ -1,6 +1,6 @@
 # ROVO Autonomous Offroad Robot
 
-This repository contains the software for the autonomous offroad robot (ROVO), based on ROS 2. The software enables precise navigation and path tracking (trajectory control) of the robot using RTK-GPS and an IMU.
+This repository contains the software for the autonomous offroad robot ([ROVO](https://www.mattro.com/products#rovo)), based on ROS 2. The software enables precise navigation and path tracking (trajectory control) of the robot using RTK-GPS and an IMU.
 
 ## Web-based User Interface (Web UI)
 
@@ -36,6 +36,8 @@ Make sure the control PC and Raspberry Pi are on the same network and open a ter
 ssh rovo@rovo.local
 ```
 *(Alternatively, via a direct Ethernet connection: `ssh rovo@192.168.0.153`)*
+
+> **Note:** This specific command works for the Raspberry Pi used during development, as it was configured with the hostname `rovo` and the user `rovo`. If you are using a different Raspberry Pi, you will need to replace the username, hostname (`rovo.local`), and IP address with your own configured values.
 
 After entering the password, you are connected to the Raspberry Pi.
 
