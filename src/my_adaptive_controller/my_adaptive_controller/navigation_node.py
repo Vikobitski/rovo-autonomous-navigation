@@ -66,7 +66,7 @@ class NavigationNode(Node):
             self.get_logger().info(f"Time: {self.sim_time:.1f}s | Pose: [{x_est:.2f}, {y_est:.2f}] | V: {v_cmd:.2f}")
 
         if self.nav.finished:
-            self.get_logger().info("🎯 MISSION COMPLETE!")
+            self.get_logger().info("MISSION COMPLETE!")
             self.timer.cancel()
 
 def main(args=None):
