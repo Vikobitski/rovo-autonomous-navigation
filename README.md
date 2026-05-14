@@ -2,7 +2,7 @@
 
 This repository contains the software for the autonomous offroad robot based on the ["ROVO 3 Heavy Duty" platform by HAWE Hydraulik](https://www.mattro.com/products#rovo). The system is a fully electric, differential-drive tracked vehicle specifically designed for demanding off-road environments such as vineyards. 
 
-Developed as part of a master's project, this ROS 2-based software system enables precise and reproducible trajectory tracking in open fields. By fusing high-precision RTK GPS data with an IMU, the navigation stack allows the robot to reliably follow user-defined paths. This autonomous mobility serves as the foundational platform for automating agricultural processes, such as the adaptive spraying of vines.
+Developed as part of a master's project, this ROS 2-based software system enables trajectory tracking in open fields. By fusing RTK GPS data with an IMU, the navigation stack allows the robot to follow user-defined paths. This autonomous mobility serves as the foundational platform for automating agricultural processes, such as the adaptive spraying of vines.
 
 ## Web-based User Interface (Web UI)
 
